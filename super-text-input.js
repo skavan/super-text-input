@@ -63,13 +63,14 @@ class SuperTextInput extends LitElement {
 	// Text field style constants
 	static TEXT_FIELD_STYLES = {
 		width: "100%",
-		height: "36px",
+		height: "52px",
 		marginLeft: "0px",
         marginRight: "0px",
 		offsetLeftMargin: "8px",
 		defaultTextLeftPadding: "6px",
 		defaultTextBottomMargin: "-3px",
 	};
+
 
 	// Add these new static methods here
 
@@ -187,39 +188,77 @@ class SuperTextInput extends LitElement {
 	 * Apply styles to the text field
 	 * @param {HTMLElement} textField - Text field element to style
 	 */
-	_getTextFieldStyles(textField) {
+	_getOuterTextFieldStyles(textField) {
 		const style = this._config.style?.editor || {};
 		const hasLeadingButtons = this._config.buttons?.some((btn) => !btn.position || btn.position === "start");
 
 		const styles = { ...SuperTextInput.TEXT_FIELD_STYLES };
+		if (hasLeadingButtons) styles.marginLeft = styles.offsetLeftMargin;
+		styles.marginLeft = style["margin-left"] || styles.marginLeft;
+		styles.marginRight = style["margin-right"] || styles.marginRight;
+		styles.height = style["height"] || styles.height;
 
-        
-		if (hasLeadingButtons) {
-			styles.marginLeft = styles.offsetLeftMargin;
-		} 
-        styles.marginLeft = style["margin-left"] || styles.marginLeft;
-        styles.marginRight = style["margin-right"] || styles.marginRight;
-		Object.assign(textField.style, styles);
+		textField.style.width = styles.width;
+		textField.style.marginLeft = styles.marginLeft;
+		textField.style.marginRight = styles.marginRight;
+	}
 
-		textField.updateComplete.then(() => {
-			const mdcTextField = textField.shadowRoot.querySelector(".mdc-text-field");
-			if (mdcTextField) {
-				mdcTextField.style.height = styles.height;
-				if (style.background) mdcTextField.style.background = style.background;
-				mdcTextField.style.paddingLeft = style["padding-left"] || styles.defaultTextLeftPadding;
+	async _applyDeepTextFieldStyles() {
+		if (!this._config) return;
+
+		const style = this._config.style?.editor || {};
+		const styles = { ...SuperTextInput.TEXT_FIELD_STYLES };
+		styles.height = style["height"] || styles.height;
+
+		await customElements.whenDefined("ha-input");
+
+		const textField = this.shadowRoot?.querySelector("#textinput");
+		if (!textField) return;
+
+		if (textField.updateComplete) await textField.updateComplete;
+		if (!textField.shadowRoot) return;
+
+		// Web Awesome component (ha-input in HASS 2026.4+)
+		const waInput = textField.shadowRoot.querySelector("wa-input");
+		if (waInput) {
+			waInput.style.height = styles.height;
+			if (waInput.updateComplete) await waInput.updateComplete;
+
+			const waRoot = waInput.shadowRoot;
+			if (waRoot) {
+				const label = waRoot.querySelector("label");
+				if (label) {
+					label.style.paddingTop = "1px";
+					label.style.paddingBottom = "0px";
+					label.style.lineHeight = "1.2";
+				}
+				const base = waRoot.querySelector("[part='base']");
+				if (base) {
+					base.style.paddingTop = "2px";
+					base.style.paddingBottom = "2px";
+					if (style.background) base.style.background = style.background;
+					if (style["padding-left"]) base.style.paddingLeft = style["padding-left"];
+				}
 			}
+			return;
+		}
 
-			const input = textField.shadowRoot.querySelector(".mdc-text-field__input");
-			if (input) {
-				input.style.alignSelf = "end";
-				input.style.marginBottom = style["margin-bottom"] || styles.defaultTextBottomMargin;
-			}
-
-			const label = textField.shadowRoot.querySelector(".mdc-floating-label");
-			if (label) {
-				label.style.setProperty("left", style["padding-left"] || styles.defaultTextLeftPadding, "important");
-			}
-		});
+		// Legacy MDC component (ha-textfield in HASS < 2026.4)
+		const mdcTextField = textField.shadowRoot.querySelector(".mdc-text-field");
+		if (mdcTextField) {
+			mdcTextField.style.height = styles.height;
+			if (style.background) mdcTextField.style.background = style.background;
+			mdcTextField.style.paddingLeft = style["padding-left"] || styles.defaultTextLeftPadding;
+		}
+		const input = textField.shadowRoot.querySelector(".mdc-text-field__input");
+		if (input) {
+			input.style.alignSelf = "end";
+			input.style.marginBottom = style["margin-bottom"] || styles.defaultTextBottomMargin;
+		}
+		const label = textField.shadowRoot.querySelector(".mdc-floating-label");
+		if (label) {
+			label.style.setProperty("left", style["padding-left"] || styles.defaultTextLeftPadding, "important");
+		}
 	}
 
 	/**
@@ -227,8 +266,8 @@ class SuperTextInput extends LitElement {
 	 * @returns {HTMLElement} Configured text field
 	 */
 	_createTextField() {
-		// Create Home Assistant's material design text field
-		const textField = document.createElement("ha-textfield");
+		// Create Home Assistant text field (ha-input since HASS 2026.4, replaces ha-textfield)
+		const textField = document.createElement("ha-input");
 
 		// Set up basic field properties from component state
 		textField.label = this.label; // Display label above input
@@ -247,8 +286,8 @@ class SuperTextInput extends LitElement {
 		// 'input' fires on every keystroke for real-time updates
 		textField.addEventListener("input", this.inputChanged.bind(this));
 
-		// Apply configured styles to the field
-		this._getTextFieldStyles(textField);
+		// Apply outer styles (width, margins) — deep shadow styles applied in updated()
+		this._getOuterTextFieldStyles(textField);
 
 		// Focus Management:
 		// This code maintains cursor position and typing flow during real-time updates
@@ -289,7 +328,6 @@ class SuperTextInput extends LitElement {
 	render() {
 		const card = document.createElement("ha-card");
 		this._getCardStyles(card);
-		console.log("rendering-card");
 		// create the leading buttons, if any
 		if (this._config.buttons) {
 			card.appendChild(this._buttonFactory.createButtonContainer(false, this._config.buttons));
@@ -304,6 +342,11 @@ class SuperTextInput extends LitElement {
 		}
 
 		return html`${card}`;
+	}
+
+	updated(changedProps) {
+		super.updated(changedProps);
+		this._applyDeepTextFieldStyles();
 	}
 
 	/**
