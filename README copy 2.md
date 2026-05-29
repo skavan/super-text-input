@@ -79,7 +79,7 @@ A truly minimal one-liner search field:
 type: custom:super-text-input
 entity: input_text.search
 placeholder: search...
-hide_label: true           # slim mode — collapses to a single row, no label area
+hide_label: true
 ```
 <img src="images/recipe-1-minimalist.png" width="300">
 
@@ -109,37 +109,37 @@ hide_label: true           # slim mode — collapses to a single row, no label a
   label: Bubble Card
   placeholder: transparent background...
   buttons:
-    - id: toast                          # id is yours — useful for card_mod & the `clear` template
-      icon: mdi:text-box-edit            # any mdi icon
-      position: start                    # start = left of input; end = right
-      size: 38px                         # outer button (default 36px)
-      icon_size: 26px                    # icon inside the button (default 24px)
+    - id: toast
+      icon: mdi:text-box-edit
+      position: start
+      size: 38px
+      icon_size: 26px
       style:
-        border_radius: 50%               # button shape; also reshapes the hover overlay
-        background: mintcream            # button fill
-        color: limegreen                 # icon color
-      tap_action:                        # any HA action; supports {{ value }}
+        border_radius: 50%
+        background: mintcream
+        color: limegreen
+      tap_action:
         action: fire-dom-event
         browser_mod:
           service: browser_mod.notification
           data:
             message: 'Your toast: {{value}}'
   style:
-    card:                                # outer card chrome (around buttons + input)
+    card:
       height: 56px
-      padding: 8px                       # space between card edge and inner content
+      padding: 8px
       margin: 0px
       background: white
-      border-radius: 28px                # pill shape
+      border-radius: 28px
       border: 1px solid rgba(0,0,0,0.1)
-    editor:                              # the input/text area itself
-      height: 100%                       # fill card minus card padding
-      background: transparent            # let the card's white show through
-      padding-left: 8px                  # where the value text starts horizontally
-      label-font-size: 12px              # default is 10px; bump for a louder label
+    editor:
+      height: 100%
+      background: transparent
+      padding-left: 8px
+      label-font-size: 12px     
       label-font-weight: 600
-      margin-left: 6px                   # nudge the whole input rightward
-      margin-right: 24px                 # leave room on the right
+      margin-left: 6px
+      margin-right: 24px
 ```
 
 BubbleCard-esque: </br>
@@ -224,7 +224,7 @@ change_action:
   action: call-service
   service: script.mass_media_search
   data:
-    search_param: "{{ value }}"           # current input value gets substituted in
+    search_param: "{{ value }}"
     media_type: playlist
     sensor_id: ma_mqtt_sensor
     media_player: MA Connect Basement
@@ -239,7 +239,7 @@ buttons:
   - id: toast
     icon: mdi:bell
     tap_action:
-      action: fire-dom-event              # browser_mod's required action type
+      action: fire-dom-event
       browser_mod:
         service: browser_mod.notification
         data:
@@ -263,35 +263,35 @@ Three actions are common enough that the card ships them as named templates. Set
 Buttons live at `start` (left of the input) or `end` (right). You can mix sizes, shapes and actions freely.
 
 ```yaml
-  compact_buttons: false                  # leave the MD touch-target padding (default)
+  compact_buttons: false
   buttons:
     - id: edit
       icon: mdi:text-box-edit
       position: start
       size: 28px
       icon_size: 20px
-
+      
     - id: clear
       icon: mdi:close
       position: end
       size: 22px
       icon_size: 16px
-      template: clear                     # built-in: blanks the entity's value
+      template: clear
       style:
-        background: transparent           # no fill — just a bare icon
+        background: transparent
         color: grey
-        margin_left: 2px                  # underscore form is fine — normalized to margin-left
+        margin_left: 2px
         margin_right: 4px
     - id: info
       icon: mdi:information-outline
       position: end
       size: 28px
       icon_size: 18px
-      template: more-info                 # built-in: opens the entity's more-info dialog
+      template: more-info
       style:
         background: transparent
         color: green
-        border: 1.5px solid green         # a decorative outline ring
+        border: 1.5px solid green
         margin_left: 4px
         margin_right: 0px
 ```
@@ -335,8 +335,8 @@ buttons:
     style:
       background: transparent
       color: grey
-      margin-left: 2px                    # tight against the input
-      margin-right: 4px                   # small gap before the next button
+      margin-left: 2px
+      margin-right: 4px
   - id: info
     icon: mdi:information-outline
     position: end
@@ -346,9 +346,9 @@ buttons:
     style:
       background: transparent
       color: green
-      border: 1.5px solid green           # the distinctive ringed look
+      border: 1.5px solid green
       margin-left: 4px
-      margin-right: 0px                   # flush with the card edge
+      margin-right: 0px
 ```
 
 ### 2. Google-style slim search pill (vertically centered)
@@ -362,7 +362,7 @@ type: custom:super-text-input
 entity: input_text.sti_test
 placeholder: Search…
 hide_label: true
-compact_buttons: true                     # strip the 48px MD touch-target around every button
+compact_buttons: true
 buttons:
   - id: l
     icon: mdi:magnify
@@ -384,17 +384,17 @@ buttons:
       color: '#5f6368'
 style:
   card:
-    height: 44px                          # short pill height
+    height: 44px
     padding: 6px
-    border-radius: 22px                   # half of height = perfect pill
+    border-radius: 22px
     border: '1px solid #dadce0'
   editor:
-    vertical-align: center                # value text sits in the visual middle of the pill
+    vertical-align: center
     height: 32px
     background: transparent
-    padding-left: 0px                     # flush against the magnify icon
+    padding-left: 0px
     padding-right: 4px
-    line-color: transparent               # hide the underline — pills don't have one
+    line-color: transparent
     margin-left: 0px
 ```
 
@@ -424,14 +424,14 @@ style:
     height: 48px
     padding: 4px
     background: '#f8fafc'
-    border-radius: 24px                   # half of height = pill
+    border-radius: 24px
     border: '1px solid #e2e8f0'
   editor:
     height: 100%
     background: transparent
-    padding-left: 14px                    # room for the placeholder text
+    padding-left: 14px
     padding-right: 4px
-    padding-bottom: 11px                  # bump text up so it centers without using vertical-align
+    padding-bottom: 11px
     line-color: transparent
 ```
 
@@ -448,18 +448,18 @@ label: Dark Notes
 placeholder: jot something…
 style:
   card:
-    height: 80px                          # taller card for a notes-style block
+    height: 80px
     padding: 12px
-    background: '#1e293b'                 # dark navy
+    background: '#1e293b'
     border-radius: 14px
   editor:
     background: transparent
-    label-color: '#60a5fa'                # blue label
-    label-font-size: 16px                 # larger than default 10px — louder header
-    font-size: 16px                       # value text size
-    color: '#f1f5f9'                      # near-white value text on dark bg
-    placeholder-color: '#64748b'          # muted placeholder
-    line-color: '#60a5fa'                 # blue underline matches the label
+    label-color: '#60a5fa'
+    label-font-size: 16px
+    font-size: 16px
+    color: '#f1f5f9'
+    placeholder-color: '#64748b'
+    line-color: '#60a5fa'
 ```
 
 ## Forward-compatibility notes
