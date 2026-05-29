@@ -23,7 +23,8 @@ import {
 	handleAction,
 	debounce,
 	computeStateName,
-} from "./card-utils.js?v=0.3.16";
+	normalizeStyleKeys,
+} from "./card-utils.js?v=0.3.18";
 
 import "./editor.js";
 
@@ -115,6 +116,26 @@ class SuperTextInput extends LitElement {
 			...SuperTextInput.DEFAULT_CONFIG,
 			...config,
 		};
+
+		// Normalize underscored CSS-style keys to hyphens once, here, so
+		// downstream reads can use the canonical form ("padding-left") without
+		// each call site having to check `padding_left` as a fallback. We
+		// only touch the three known style containers — top-level config
+		// keys like `change_action`, `hide_label`, `update_mode`,
+		// `compact_buttons`, etc. are NOT modified.
+		if (this._config.style) {
+			this._config.style = {
+				...this._config.style,
+				card: normalizeStyleKeys(this._config.style.card),
+				editor: normalizeStyleKeys(this._config.style.editor),
+			};
+		}
+		if (Array.isArray(this._config.buttons)) {
+			this._config.buttons = this._config.buttons.map((b) => ({
+				...b,
+				style: normalizeStyleKeys(b.style),
+			}));
+		}
 
 		if (config.entity) {
 			this._entityType = config.entity.split(".")[0];
@@ -209,11 +230,11 @@ class SuperTextInput extends LitElement {
 		);
 		const styles = { ...SuperTextInput.TEXT_FIELD_STYLES };
 		if (hasLeadingButtons) styles.marginLeft = styles.offsetLeftMargin;
-		// Accept hyphenated or underscored keys (margin-left / margin_left).
-		const ml = style["margin-left"] ?? style["margin_left"];
-		const mr = style["margin-right"] ?? style["margin_right"];
-		const mt = style["margin-top"] ?? style["margin_top"];
-		const mb = style["margin-bottom"] ?? style["margin_bottom"];
+		// Keys are already hyphenated thanks to normalizeStyleKeys() in setConfig.
+		const ml = style["margin-left"];
+		const mr = style["margin-right"];
+		const mt = style["margin-top"];
+		const mb = style["margin-bottom"];
 		if (ml !== undefined) styles.marginLeft = ml;
 		if (mr !== undefined) styles.marginRight = mr;
 		styles.height = style["height"] || styles.height;
@@ -250,6 +271,13 @@ class SuperTextInput extends LitElement {
 	 */
 	async _applyDeepInputStyles() {
 		if (!this._config) return;
+		// Bump a per-instance version token. If a newer call starts while
+		// we're awaiting updateComplete, the older call bails out cleanly
+		// when it resumes instead of racing the newer one's writes to
+		// adoptedStyleSheets / inline styles.
+		const myVersion = (this._deepStyleVersion = (this._deepStyleVersion || 0) + 1);
+		const isStale = () => myVersion !== this._deepStyleVersion;
+
 		const textField = this.shadowRoot?.querySelector("#textinput");
 		if (!textField) return;
 
@@ -271,9 +299,16 @@ class SuperTextInput extends LitElement {
 		}
 
 		if (textField.updateComplete) await textField.updateComplete;
+		if (isStale()) return;
 		if (!textField.shadowRoot) return;
 
 		// ─── Web Awesome path (HASS 2026.4+) ───
+		// FORWARD-COMPAT: this assumes ha-input is a thin wrapper that renders
+		// a single <wa-input> inside its shadow. If HA inlines or replaces
+		// the wa-input element, this querySelector returns null and we fall
+		// through to the legacy MDC path below — which also won't find its
+		// elements, so styling silently no-ops (the card still works, just
+		// with default wa-input styling).
 		const waInput = textField.shadowRoot.querySelector("wa-input");
 		if (waInput) {
 			// Height: inline on the wa-input element (the only knob that works).
@@ -282,6 +317,7 @@ class SuperTextInput extends LitElement {
 			// All other overrides go through an injected stylesheet — that's the
 			// only thing that reliably wins against wa-input's bundled CSS.
 			if (waInput.updateComplete) await waInput.updateComplete;
+			if (isStale()) return;
 			this._injectWaStyles(waInput, style);
 			return;
 		}
@@ -369,6 +405,12 @@ class SuperTextInput extends LitElement {
 		if (labelPadRight) labelProps.push(`padding-right: ${labelPadRight} !important`);
 		if (labelFontWeight) labelProps.push(`font-weight: ${labelFontWeight} !important`);
 		if (labelColor) labelProps.push(`color: ${labelColor} !important`);
+		// FORWARD-COMPAT: `label.label` targets a CLASS inside wa-input's
+		// shadow tree, not a documented `part`. Web Awesome could rename the
+		// class in a DOM refactor — if that happens, all label styling
+		// (padding / font / color) silently stops applying. The fix would
+		// be `[part="label"]` if/when wa-input exposes it, or a new
+		// internal class name.
 		if (labelProps.length) rules.push(`label.label { ${labelProps.join("; ")}; }`);
 		if (bg) rules.push(`[part="base"] { background: ${bg} !important; background-color: ${bg} !important; }`);
 
@@ -388,7 +430,7 @@ class SuperTextInput extends LitElement {
 		// inside the editor area. Defaults to bottom (the README-classic look,
 		// aligned just above the underline). Useful in hide_label / slim cards
 		// where the value should sit in the visual center of the pill.
-		const valign = style["vertical-align"] ?? style["vertical_align"];
+		const valign = style["vertical-align"];
 		const isCentered = valign === "center" || valign === "middle";
 		const defaultPadTop = showLabel ? "20px" : null;
 		// When centering, drop the default bottom inset so the symmetric
@@ -439,6 +481,10 @@ class SuperTextInput extends LitElement {
 		if (placeholderColor) rules.push(
 			`[part="input"]::placeholder { color: ${placeholderColor} !important; }`
 		);
+		// FORWARD-COMPAT: wa-input draws its bottom underline via the
+		// `[part="base"]::after` pseudo-element. If wa-input switches to a
+		// `border-bottom` or a real DOM node, the `line-color` style key
+		// becomes a no-op (underline reverts to wa-input's default).
 		if (lineColor) rules.push(
 			`[part="base"]::after { background: ${lineColor} !important; background-color: ${lineColor} !important; }`
 		);
@@ -570,14 +616,12 @@ class SuperTextInput extends LitElement {
 			}
 		}
 
-		// Outer input styles: cheap, run every update so margin recalc on
-		// button toggle stays in sync.
-		const textField = this.shadowRoot?.querySelector("#textinput");
-		if (textField) this._applyOuterInputStyles(textField);
-
-		// Deep shadow-DOM styles only run when config (and therefore style)
-		// changes — re-renders driven by `value` updates skip this.
+		// Outer-input + deep shadow-DOM styles only run when config (and
+		// therefore style) changes. Skipping these on value-driven re-renders
+		// avoids per-keystroke recompute in realtime mode.
 		if (changedProps.has("_config")) {
+			const textField = this.shadowRoot?.querySelector("#textinput");
+			if (textField) this._applyOuterInputStyles(textField);
 			this._applyDeepInputStyles();
 		}
 	}
@@ -625,6 +669,6 @@ window.customCards.push({
 		"A text input card with enhanced features - real-time input, icons, buttons and actions",
 	preview: "/local/community/super-text-input/preview.png",
 	configurable: true,
-	version: "0.3.16",
+	version: "0.3.18",
 	customElement: true,
 });

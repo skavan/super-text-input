@@ -47,12 +47,30 @@ const PREBUILT_ACTIONS = (entity_id) => {
 /**
  * Read a style key in either hyphenated ("margin-left") or underscored
  * ("margin_left") form. YAML allows both and users mix them; we accept either.
+ *
+ * Note: as of v0.3.17, setConfig normalizes underscores → hyphens at config
+ * load time, so this fallback is mostly a safety net for direct callers.
  */
 export function readStyleKey(style, hyphenated) {
 	if (!style) return undefined;
 	if (style[hyphenated] !== undefined) return style[hyphenated];
 	const underscored = hyphenated.replace(/-/g, "_");
 	return style[underscored];
+}
+
+/**
+ * Convert underscore-keyed style props to hyphenated form (shallow walk —
+ * style blocks are flat in our YAML). Used once at config-load time so
+ * downstream reads can use the canonical CSS form ("padding-left") without
+ * each call site having to fall back to the underscored variant.
+ */
+export function normalizeStyleKeys(obj) {
+	if (!obj || typeof obj !== "object" || Array.isArray(obj)) return obj;
+	const out = {};
+	for (const [k, v] of Object.entries(obj)) {
+		out[k.replace(/_/g, "-")] = v;
+	}
+	return out;
 }
 
 // Button Utilities
@@ -266,39 +284,69 @@ export class ButtonFactory {
 		const style = { ...DEFAULT_BUTTON_STYLE, ...(buttonConfig?.style || {}) };
 		const radius = readStyleKey(style, "border-radius") || "50%";
 		const radiusRule = `border-radius: ${radius} !important; overflow: hidden !important;`;
+		// ha-button's own ::after is what actually draws the MD hover/focus
+		// overlay (background fades in on hover). It's hardcoded to
+		// border-radius: 50% inside ha-button's stylesheet — override here
+		// so the hover shape matches the rounded-rect host instead of
+		// always being a circle.
+		// FORWARD-COMPAT: ha-button::after/::before is a Material/Web Awesome
+		// implementation detail. If HA swaps to mwc-ripple/md-ripple or
+		// renames the pseudo, this rule becomes a no-op (hover reverts to
+		// default circle); it won't error.
+		const outerCss = `ha-button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; ${radiusRule} } ha-button::after, ha-button::before { border-radius: ${radius} !important; }`;
+		const innerCss = `[part="base"], button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; box-sizing: border-box !important; ${radiusRule} }`;
+
+		// Cancel any in-flight retry chain from a previous call so we don't
+		// leave parallel chains racing on the same button after rapid
+		// setConfig() calls.
+		if (button._stiInjectTimer) {
+			clearTimeout(button._stiInjectTimer);
+			button._stiInjectTimer = null;
+		}
 
 		const tryInject = (depth = 0) => {
+			// On retries (depth > 0) bail if the button was detached while
+			// we were waiting. We can't check isConnected on depth 0 — this
+			// function is called synchronously from createIconButton right
+			// after document.createElement, before the button is appended,
+			// so isConnected is legitimately false on the first call.
+			if (depth > 0 && !button.isConnected) return;
+
 			if (!button.shadowRoot) {
 				if (depth > 20) return;
-				setTimeout(() => tryInject(depth + 1), 50);
+				button._stiInjectTimer = setTimeout(() => tryInject(depth + 1), 50);
 				return;
 			}
 			try {
-				const outer = new CSSStyleSheet();
-				// ha-button's own ::after is what actually draws the MD
-				// hover/focus overlay (background fades in on hover).
-				// It's hardcoded to border-radius: 50% inside ha-button's
-				// stylesheet — override it here so the hover shape matches
-				// the rounded-rect host instead of always being a circle.
-				outer.replaceSync(
-					`ha-button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; ${radiusRule} } ha-button::after, ha-button::before { border-radius: ${radius} !important; }`
-				);
-				button.shadowRoot.adoptedStyleSheets = [
-					...button.shadowRoot.adoptedStyleSheets,
-					outer,
-				];
+				// Cache the outer sheet on the button host so re-calls
+				// reuse the SAME CSSStyleSheet instance via replaceSync —
+				// without this, every setConfig appends a new sheet and
+				// the adoptedStyleSheets array grows unboundedly.
+				let outerSheet = button._stiOuterSheet;
+				if (!outerSheet) {
+					outerSheet = new CSSStyleSheet();
+					button._stiOuterSheet = outerSheet;
+					button.shadowRoot.adoptedStyleSheets = [
+						...button.shadowRoot.adoptedStyleSheets,
+						outerSheet,
+					];
+				}
+				outerSheet.replaceSync(outerCss);
+
 				const haButton = button.shadowRoot.querySelector("ha-button");
 				if (haButton && haButton.shadowRoot) {
-					const inner = new CSSStyleSheet();
-					inner.replaceSync(
-						`[part="base"], button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; box-sizing: border-box !important; ${radiusRule} }`
-					);
-					haButton.shadowRoot.adoptedStyleSheets = [
-						...haButton.shadowRoot.adoptedStyleSheets,
-						inner,
-					];
+					let innerSheet = button._stiInnerSheet;
+					if (!innerSheet) {
+						innerSheet = new CSSStyleSheet();
+						button._stiInnerSheet = innerSheet;
+						haButton.shadowRoot.adoptedStyleSheets = [
+							...haButton.shadowRoot.adoptedStyleSheets,
+							innerSheet,
+						];
+					}
+					innerSheet.replaceSync(innerCss);
 				} else if (haButton && depth < 20) {
-					setTimeout(() => tryInject(depth + 1), 50);
+					button._stiInjectTimer = setTimeout(() => tryInject(depth + 1), 50);
 				}
 			} catch (e) {}
 		};
@@ -316,7 +364,7 @@ export class ButtonFactory {
 			} else if (config.template && PREBUILT_ACTIONS(this._config.entity)[config.template]) {
 				const entity = config.entity || this._config.entity;
 				handleAction(PREBUILT_ACTIONS(entity)[config.template], this._element.value, this._element);
-				
+
 			}
 			// If no tap_action and no template or invalid template button has no action
 		});
