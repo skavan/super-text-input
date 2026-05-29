@@ -8,7 +8,7 @@
  * - Optimized update cycle to prevent YAML editor state loss
  */
 
-import BaseCardEditor from "./base-editor.js";
+import BaseCardEditor from "./base-editor.js?v=0.3.22";
 
 // Get LitElement base class from Home Assistant frontend
 const LitElement = customElements.get("home-assistant-main")
@@ -49,7 +49,8 @@ class SuperTextInputEditor extends BaseCardEditor {
      */
     static HANDLED_PROPS = new Set([
         "type", "name", "entity", "label", "placeholder",
-        "update_mode", "debounce_time", "style", "buttons", "change_action",
+        "update_mode", "debounce_time", "hide_label", "compact_buttons",
+        "style", "buttons", "change_action",
     ]);
 
     /**
@@ -104,15 +105,18 @@ class SuperTextInputEditor extends BaseCardEditor {
                 ${this.buildEntityPickerField("Entity (Required)", "entity", this._config.entity, ["input_text", "text"])}
                 ${this.buildTextField("Name (Optional)", "name", this._config.name)}
                 ${this.buildTextField("Label (Optional)", "label", this._config.label)}
-                ${this.buildTextField("Placeholder (Optional)", "placeholder", "")}
+                ${this.buildTextField("Placeholder (Optional)", "placeholder", this._config.placeholder)}
+                ${this.buildSwitchField("Hide Label (slim mode)", "hide_label", this._config.hide_label, false)}
+                ${this.buildSwitchField("Compact Buttons (tighter spacing)", "compact_buttons", this._config.compact_buttons, false)}
                 ${this.buildSelectField(
                     "Update Mode",
                     "update_mode",
                     SuperTextInputEditor.UPDATE_MODE_OPTIONS,
-                    this._config.update_mode
+                    this._config.update_mode,
+                    "blur"
                 )}
                 ${this._config.update_mode === "realtime"
-                    ? this.buildNumberField("Debounce Time (ms)", "debounce_time", this._config.debounce_time, null, 100)
+                    ? this.buildNumberField("Update Frequency (ms)", "debounce_time", this._config.debounce_time, 1000, 100)
                     : ""}
                 ${this.buildYamlEditor("Styles (optional)", "style", this._config.style)}
                 ${this.buildYamlEditor("Buttons/Icons (optional)", "buttons", this._config.buttons)}

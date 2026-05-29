@@ -4,6 +4,34 @@ All notable changes to this project. Versioning is loosely SemVer — minor bump
 back-compatible additions, patch bumps are fixes, anything that shifts a default look
 is called out in the README's [Breaking changes](README.md#-breaking-changes) section.
 
+## v0.3.22
+
+### Changed
+- Update Mode dropdown now displays "On Blur" as the visible default when no `update_mode` is set in YAML (was blank). Matches the card's actual fallback behaviour.
+
+## v0.3.21
+
+### Added
+- **Hide Label** and **Compact Buttons** are now first-class settings in the visual editor (was YAML-only). Both as toggles.
+
+### Changed
+- "Debounce Time (ms)" relabeled to "Update Frequency (ms)" — clearer what it does.
+
+### Fixed
+- **All text inputs in the editor** (Name / Label / Placeholder, plus the renamed Update Frequency field) rendered at zero height in HA 2026.4+ because `ha-textfield` was removed. Switched to `ha-input` with a fallback to `ha-textfield` on older HA.
+- **Hide Label / Compact Buttons switches** use `ha-formfield` + `ha-switch`. `ha-selector-boolean` was the old wrapper and is also gone in 2026.4+.
+
+## v0.3.20
+
+### Fixed
+- **Editor: Update Mode selection** — clicking an option in the dropdown was a no-op. The new `ha-select` fires a `selected` event (with `detail.value`) when a menu item is clicked, not `change`. `buildSelectField` now listens for both events.
+
+## v0.3.19
+
+### Fixed
+- **Editor: Update Mode dropdown** was empty in HA 2026.4+. HA rewrote `ha-select` to take an `options` property (`[{value, label}]`) instead of slotted `<ha-list-item>` children. `buildSelectField` now passes both — new HA uses `.options`, older HA still uses the children.
+- **Editor: Debounce Time field** now defaults to `1000` when realtime mode is selected on a fresh card (was blank).
+
 ## v0.3.18
 
 ### Fixed
