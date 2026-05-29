@@ -1,0 +1,257 @@
+views:
+  - type: sections
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: '## Super Text Input — v0.3.9 Test Grid'
+          - type: markdown
+            content: '### minimalist - no styling'
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: search...
+            hide_label: true
+
+          - type: markdown
+            content: '### icons + buttons - normal + compact mode'
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            label: icons and buttons
+            compact_buttons: false
+            buttons:
+              - id: edit
+                icon: mdi:text-box-edit
+                position: start
+                size: 28px
+                icon_size: 20px
+                
+              - id: clear
+                icon: mdi:close
+                position: end
+                size: 22px
+                icon_size: 16px
+                template: clear
+                style:
+                  background: transparent
+                  color: grey
+                  margin_left: 2px
+                  margin_right: 4px
+              - id: info
+                icon: mdi:information-outline
+                position: end
+                size: 28px
+                icon_size: 18px
+                template: more-info
+                style:
+                  background: transparent
+                  color: green
+                  border: 1.5px solid green
+                  margin_left: 4px
+                  margin_right: 0px
+            content: |-
+              ---
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            label: negative margin
+            compact_buttons: true
+            buttons:
+              - id: edit
+                icon: mdi:text-box-edit
+                position: start
+                
+              - id: clear
+                icon: mdi:close
+                position: end
+                icon_size: 16px
+                style:
+                  background: transparent
+                  color: grey
+                  margin_left: -32px                 
+                template: clear
+              - id: info
+                icon: mdi:information-outline
+                position: end
+                template: more-info
+                style:
+                  background: transparent
+                  color: green
+                  border: 1px solid lightgray
+                  border-radius: 12px
+                  margin_left: 2px
+                  margin_right: 0px
+            content: |-
+              ---    
+              
+              
+          - type: markdown
+            content: '### more styling examples'
+          
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            name: my name
+            label: enter text
+            placeholder: shaded background...
+            update_mode: realtime
+            debounce_time: 1000
+            style:
+              editor:
+                background: aliceblue
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            label: Bubble Card
+            placeholder: transparent background...
+            buttons:
+              - id: toast
+                icon: mdi:text-box-edit
+                position: start
+                size: 38px
+                icon_size: 26px
+                style:
+                  border_radius: 50%
+                  background: mintcream
+                  color: limegreen
+                tap_action:
+                  action: fire-dom-event
+                  browser_mod:
+                    service: browser_mod.notification
+                    data:
+                      message: 'Your toast: {{value}}'
+            style:
+              card:
+                height: 56px
+                padding: 8px
+                margin: 0px
+                background: white
+                border-radius: 28px
+                border: 1px solid rgba(0,0,0,0.1)
+              editor:
+                height: 100%
+                background: transparent
+                padding-left: 8px
+                label-font-size: 12px     
+                label-font-weight: 600
+                margin-left: 6px
+                margin-right: 24px
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: Search…(vertically centered)
+            hide_label: true
+            compact_buttons: true
+            buttons:
+              - id: l
+                icon: mdi:magnify
+                position: start
+                size: 28px
+                icon_size: 18px
+                style:
+                  
+                  padding-right: 0px
+                  background: transparent
+                  color: '#5f6368'
+              - id: x
+                icon: mdi:close
+                position: end
+                size: 28px
+                icon_size: 16px
+                template: clear
+                style:
+                  background: transparent
+                  color: '#5f6368'
+            style:
+              card:
+                height: 44px
+                padding: 6px
+                border-radius: 22px
+                border: '1px solid #dadce0'
+              editor:
+                vertical-align: center
+                height: 32px
+                background: transparent
+                padding-left: 0px
+                padding-right: 4px
+                line-color: transparent
+                margin-left: 0px
+
+          
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: Ask anything…WhatsApp
+            hide_label: true
+            compact_buttons: true
+            buttons:
+              - id: s
+                icon: mdi:send
+                position: end
+                size: 32px
+                icon_size: 20px
+                style:
+                  background: transparent
+                  color: '#1a73e8'
+            style:
+              card:
+                height: 48px
+                padding: 4px
+                background: '#f8fafc'
+                border-radius: 24px
+                border: '1px solid #e2e8f0'
+              editor:
+                height: 100%
+                background: transparent
+                padding-left: 14px
+                padding-right: 4px
+                padding-bottom: 11px
+                line-color: transparent
+
+          - type: markdown
+            content: '### dark examples'
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            label: Dark Notes
+            placeholder: jot something…
+            style:
+              card:
+                height: 80px
+                padding: 12px
+                background: '#1e293b'
+                border-radius: 14px 
+              editor:
+                background: transparent
+                label-color: '#60a5fa'
+                label-font-size: 16px
+                font-size: 16px
+                color: '#f1f5f9'
+                placeholder-color: '#64748b'
+                line-color: '#60a5fa'
+
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            label: Artist
+            placeholder: text here…
+            style:
+              card:
+                height: 84px
+                padding: 18px
+                border: 0px
+                background: dimgrey
+                border-radius: 0px 0px 0 0
+              editor:
+                background: grey
+                border-radius: 12px 12px 0 0
+                color: white
+                label-color: lightgrey
+                label-padding-top: 8px
+                label-padding-left: 12px
+                label-font-size: 12px     
+                font-size: 16px
+                padding-bottom: 4px
+                padding-left: 12px
+                line-color: white
+
+
+            
+     

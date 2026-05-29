@@ -1,6 +1,6 @@
 // Default style constants used across custom cards
 export const CARD_HEIGHT = "56px";
-export const DEFAULT_PADDING = "10px";
+export const DEFAULT_PADDING = "8px";
 export const DEFAULT_BUTTON_SIZE = 36;
 export const DEFAULT_BUTTON_STYLE = {
 	color: "var(--blue-color)",
@@ -44,39 +44,29 @@ const PREBUILT_ACTIONS = (entity_id) => {
 	};
 };
 
-// Button Utilities
 /**
- * Calculates button margins to ensure proper spacing and alignment
- * @param {string} size - Button size specified in configuration
- * @param {string} position - Button position ('start' or 'end')
- * @param {boolean} isAdditionalButton - Whether this button is part of a sequence
- * @param {Object} style - Custom style configuration object
- * @returns {Object} Calculated left and right margins
+ * Read a style key in either hyphenated ("margin-left") or underscored
+ * ("margin_left") form. YAML allows both and users mix them; we accept either.
  */
+export function readStyleKey(style, hyphenated) {
+	if (!style) return undefined;
+	if (style[hyphenated] !== undefined) return style[hyphenated];
+	const underscored = hyphenated.replace(/-/g, "_");
+	return style[underscored];
+}
+
+// Button Utilities
 export function calculateButtonMargins(size, position, isAdditionalButton, style) {
-	// Convert size string to number for calculations
 	const sizeValue = parseInt(size);
-
-	// Calculate size difference from default button size
-	// Used to adjust margins when buttons are smaller/larger than default
 	const difference = DEFAULT_BUTTON_SIZE - sizeValue;
-
-	// Calculate half of the difference, but never less than 0
-	// This ensures even spacing around the button
 	const halfDiff = difference > 0 ? difference / 2 : 0;
-
+	const userLeft = readStyleKey(style, "margin-left");
+	const userRight = readStyleKey(style, "margin-right");
 	return {
-		// Left margin logic:
-		// - Use custom margin if provided
-		// - For end position: add 8px spacing plus half the size difference
-		// - For start position: add 8px only for additional buttons in sequence
 		left:
-			style["margin-left"] ||
+			userLeft ||
 			(position === "end" ? `${halfDiff + 8}px` : `${isAdditionalButton ? halfDiff + 8 : halfDiff}px`),
-
-		// Right margin is always half the size difference
-		// Unless custom margin is provided
-		right: style["margin-right"] || `${halfDiff}px`,
+		right: userRight || `${halfDiff}px`,
 	};
 }
 
@@ -91,15 +81,33 @@ export function getButtonStyles(button, buttonConfig, isAdditionalButton, positi
 	const style = { ...DEFAULT_BUTTON_STYLE, ...buttonConfig.style };
 	const size = buttonConfig.size || DEFAULT_BUTTON_PROPERTIES.size;
 
-	button.style.setProperty("--mdc-icon-button-size", size);
+	// HA 2026.4+ ha-icon-button ignores --mdc-icon-button-size and renders
+	// at the MD touch-target default (48px). We have to force width AND
+	// height (plus min-*) inline AND override the var with !important.
+	// Also force flex-centering so the icon stays in the middle when we
+	// shrink the button — otherwise it inherits 48px-tuned padding and
+	// the icon drifts to a corner.
+	button.style.setProperty("--mdc-icon-button-size", size, "important");
+	button.style.setProperty("width", size, "important");
+	button.style.setProperty("height", size, "important");
+	button.style.setProperty("min-width", size, "important");
+	button.style.setProperty("min-height", size, "important");
+	button.style.setProperty("max-width", size, "important");
+	button.style.setProperty("max-height", size, "important");
+	button.style.setProperty("padding", "0", "important");
+	button.style.setProperty("box-sizing", "border-box", "important");
+	button.style.setProperty("flex", "0 0 auto", "important");
+	button.style.setProperty("display", "inline-flex", "important");
+	button.style.setProperty("align-items", "center", "important");
+	button.style.setProperty("justify-content", "center", "important");
 
 	const margins = calculateButtonMargins(size, position, isAdditionalButton, style);
 	button.style.marginLeft = margins.left;
 	button.style.marginRight = margins.right;
 
 	button.style.setProperty("background-color", style.background || `rgb(from ${style.color} r g b / 0.2)`);
-	button.style.setProperty("border-radius", style["border-radius"] || "50%");
-    button.style.setProperty("border", style["border"] || "none");
+	button.style.setProperty("border-radius", readStyleKey(style, "border-radius") || "50%");
+	button.style.setProperty("border", style["border"] || "none");
 }
 
 /**
@@ -111,7 +119,8 @@ export function getIconStyles(icon, buttonConfig) {
 	const style = { ...DEFAULT_BUTTON_STYLE, ...buttonConfig.style };
 	icon.style.setProperty("--mdc-icon-size", buttonConfig.icon_size || DEFAULT_BUTTON_PROPERTIES.icon_size);
 	icon.style.display = "flex";
-	icon.style.alignItems = "flex-start";
+	icon.style.alignItems = "center";
+	icon.style.justifyContent = "center";
 	icon.style.setProperty("color", style.color);
 }
 
@@ -234,7 +243,66 @@ export class ButtonFactory {
 		this._setupButtonAction(button, buttonConfig);
 		this._addButtonIcon(button, buttonConfig.icon, buttonConfig);
 
+		// ha-icon-button → ha-button → <button part="base">. Sizing the outer
+		// host doesn't shrink the inner button — the MD ripple/hover overlay
+		// draws on that inner element, so a 32px button still shows a 48px
+		// hover circle. Pierce both shadow roots to force the inner button to
+		// 100% of the host whenever the button is smaller than MD's 48px
+		// touch target. Card-level compact_buttons forces it for all buttons.
+		const size = buttonConfig.size || DEFAULT_BUTTON_PROPERTIES.size;
+		const sizeNum = parseInt(size);
+		if (this._config.compact_buttons || sizeNum < 48) {
+			this._injectCompactButtonStyles(button, buttonConfig);
+		}
+
 		return button;
+	}
+
+	_injectCompactButtonStyles(button, buttonConfig) {
+		// Propagate the host's border-radius into the inner ha-button so the
+		// MD hover/ripple overlay clips to the same shape — otherwise a
+		// border-radius: 12px host still shows a 50% (circular) hover state
+		// because the overlay draws on the inner button.
+		const style = { ...DEFAULT_BUTTON_STYLE, ...(buttonConfig?.style || {}) };
+		const radius = readStyleKey(style, "border-radius") || "50%";
+		const radiusRule = `border-radius: ${radius} !important; overflow: hidden !important;`;
+
+		const tryInject = (depth = 0) => {
+			if (!button.shadowRoot) {
+				if (depth > 20) return;
+				setTimeout(() => tryInject(depth + 1), 50);
+				return;
+			}
+			try {
+				const outer = new CSSStyleSheet();
+				// ha-button's own ::after is what actually draws the MD
+				// hover/focus overlay (background fades in on hover).
+				// It's hardcoded to border-radius: 50% inside ha-button's
+				// stylesheet — override it here so the hover shape matches
+				// the rounded-rect host instead of always being a circle.
+				outer.replaceSync(
+					`ha-button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; ${radiusRule} } ha-button::after, ha-button::before { border-radius: ${radius} !important; }`
+				);
+				button.shadowRoot.adoptedStyleSheets = [
+					...button.shadowRoot.adoptedStyleSheets,
+					outer,
+				];
+				const haButton = button.shadowRoot.querySelector("ha-button");
+				if (haButton && haButton.shadowRoot) {
+					const inner = new CSSStyleSheet();
+					inner.replaceSync(
+						`[part="base"], button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; box-sizing: border-box !important; ${radiusRule} }`
+					);
+					haButton.shadowRoot.adoptedStyleSheets = [
+						...haButton.shadowRoot.adoptedStyleSheets,
+						inner,
+					];
+				} else if (haButton && depth < 20) {
+					setTimeout(() => tryInject(depth + 1), 50);
+				}
+			} catch (e) {}
+		};
+		tryInject();
 	}
 
 	/**

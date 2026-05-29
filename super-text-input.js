@@ -1,22 +1,30 @@
 /**
- * super text input for Home Assistant
+ * Super Text Input for Home Assistant
  * Provides a customizable text input field with optional buttons and r/t updates
+ *
+ * Compat:
+ *  - HASS 2026.4+ uses <ha-input> (Web Awesome / wa-input internals)
+ *  - Older HASS uses <ha-textfield> (MDC internals)
+ *  - This card detects which is available and renders/styles accordingly.
+ *
+ * Architecture notes:
+ *  - render() returns a real Lit html template so Lit reconciles the input node
+ *    across re-renders. This preserves focus/caret while typing (fixes the
+ *    iOS keyboard-dismiss and "can't type space" problems) — no more
+ *    setTimeout(focus) hack required.
+ *  - Deep shadow-DOM styling is applied in updated() because we can't reach
+ *    into the input's shadow tree from a template.
  */
 
-// note the super hacky way of restoring focus in r/t mode. HELP!
-
-// Import utilities and constants from card-utils.js
 import {
 	CARD_HEIGHT,
 	DEFAULT_PADDING,
-	DEFAULT_BUTTON_STYLE,
 	ButtonFactory,
 	handleAction,
 	debounce,
 	computeStateName,
-} from "./card-utils.js";
+} from "./card-utils.js?v=0.3.16";
 
-// Add this new import
 import "./editor.js";
 
 // Get LitElement base class from Home Assistant frontend
@@ -26,10 +34,18 @@ const LitElement = customElements.get("home-assistant-main")
 const html = LitElement.prototype.html;
 const css = LitElement.prototype.css;
 
+// Prefer the modern ha-input (HASS 2026.4+); fall back to ha-textfield (legacy).
+const INPUT_TAG = customElements.get("ha-input") ? "ha-input" : "ha-textfield";
+
 class SuperTextInput extends LitElement {
 	static getConfigElement() {
 		return document.createElement("super-text-input-editor");
 	}
+
+	static getStubConfig() {
+		return SuperTextInput.DEFAULT_CONFIG;
+	}
+
 	/**
 	 * Define reactive properties
 	 */
@@ -43,14 +59,9 @@ class SuperTextInput extends LitElement {
 			mode: { type: String },
 			stateObj: { type: Object },
 			_config: { type: Object },
-			_lastUpdate: { type: Number },
 		};
 	}
 
-	// Add to static constants
-	static DEFAULT_FOCUS_DELAY = 100;
-
-	// default initial values
 	static DEFAULT_CONFIG = {
 		entity: "",
 		name: "",
@@ -60,34 +71,33 @@ class SuperTextInput extends LitElement {
 		debounce_time: 1000,
 	};
 
-	// Text field style constants
+	// Heights tuned to match the README's MDC ha-textfield look:
+	// label small at top, value below, underline at bottom — without the
+	// vertical airiness wa-input's default would otherwise give.
 	static TEXT_FIELD_STYLES = {
 		width: "100%",
-		height: "36px",
+		// Default to 100% so the editor fills its inner container (card.height
+		// minus card.padding). Users can override with a fixed px value.
+		height: INPUT_TAG === "ha-input" ? "100%" : "36px",
+		heightNoLabel: INPUT_TAG === "ha-input" ? "100%" : "36px",
 		marginLeft: "0px",
-        marginRight: "0px",
+		marginRight: "0px",
 		offsetLeftMargin: "8px",
 		defaultTextLeftPadding: "6px",
 		defaultTextBottomMargin: "-3px",
 	};
 
-	// Add these new static methods here
-
-	static getConfigElement() {
-		return document.createElement("super-text-input-editor");
-	}
-
-	static getStubConfig() {
-		return SuperTextInput.DEFAULT_CONFIG;
-	}
+	// Default card heights. Smaller when there's no label (single-row input).
+	static DEFAULT_CARD_HEIGHT = INPUT_TAG === "ha-input" ? "56px" : CARD_HEIGHT;
+	static DEFAULT_CARD_HEIGHT_NO_LABEL = INPUT_TAG === "ha-input" ? "44px" : CARD_HEIGHT;
 
 	static DEFAULT_DEBOUNCE_TIME = 1000;
 
 	_internalChange = false;
+	_leadingContainer = null;
+	_trailingContainer = null;
+	_cardStylesApplied = false;
 
-	/**
-	 * Initialize default values
-	 */
 	constructor() {
 		super();
 		this.label = "";
@@ -100,10 +110,6 @@ class SuperTextInput extends LitElement {
 		this._config = null;
 	}
 
-	/**
-	 * Set up card configuration
-	 * @param {Object} config - Card configuration object
-	 */
 	setConfig(config) {
 		this._config = {
 			...SuperTextInput.DEFAULT_CONFIG,
@@ -117,6 +123,11 @@ class SuperTextInput extends LitElement {
 		this._debounce_time = config.debounce_time || SuperTextInput.DEFAULT_DEBOUNCE_TIME;
 		this._update_mode = config.update_mode || "blur";
 
+		// Invalidate button container cache so they rebuild with new config
+		this._leadingContainer = null;
+		this._trailingContainer = null;
+		this._cardStylesApplied = false;
+
 		if (config.buttons) {
 			this._buttonFactory = new ButtonFactory(config, this);
 		}
@@ -128,55 +139,44 @@ class SuperTextInput extends LitElement {
 		}
 	}
 
-	/**
-	 * Handle Home Assistant state updates
-	 * @param {Object} hass - Home Assistant instance
-	 */
 	set hass(hass) {
-		// Store current value to detect changes
 		const oldValue = this.value;
-		// Store Home Assistant object reference
 		this._hass = hass;
-		// Get the current state of our entity
 		this.stateObj = hass.states[this._config.entity];
 
 		if (this.stateObj) {
-			// Update all entity-based properties
 			this.value = this.stateObj.state;
 			this.minlength = this.stateObj.attributes.min;
 			this.maxlength = this.stateObj.attributes.max;
 			this.pattern = this.stateObj.attributes.pattern;
 			this.mode = this.stateObj.attributes.mode;
 
-			// Set name to entity friendly name if not configured
 			this._config.name = this._config.name || computeStateName(this.stateObj, this._config.entity);
-
-			// Set label to configured label or name
 			this.label = this._config.label || this._config.name;
 
-			// Handle external value changes and trigger change actions
-			// Only if change wasn't triggered internally and value actually changed
 			if (!this._internalChange && oldValue !== this.value && this._config.change_action) {
 				handleAction(this._config.change_action, this.value, this);
 			}
-
-			// Reset internal change flag
 			this._internalChange = false;
 		}
 	}
 
 	/**
-	 * Apply styles to the card container
-	 * @param {HTMLElement} card - Card element to style
+	 * Apply styles to the card container (called once in updated())
 	 */
 	_getCardStyles(card) {
 		const cardStyle = this._config.style?.card || {};
+		const defaultCardHeight = this._config.hide_label
+			? SuperTextInput.DEFAULT_CARD_HEIGHT_NO_LABEL
+			: SuperTextInput.DEFAULT_CARD_HEIGHT;
 
-		card.style.display = "flex";
-		card.style.flexDirection = "row";
-		card.style.alignItems = "center";
-		card.style.height = cardStyle.height || CARD_HEIGHT;
-		card.style.padding = cardStyle.padding || DEFAULT_PADDING;
+		// ha-card is now just a chrome container: bg + border + radius + outer
+		// height. The inner flex layout (with padding around the children) lives
+		// in a separate <div id="sti-inner"> child — see _getInnerStyles.
+		card.style.display = "block";
+		card.style.height = cardStyle.height || defaultCardHeight;
+		card.style.padding = "0";
+		card.style.boxSizing = "border-box";
 
 		if (cardStyle.background) card.style.background = cardStyle.background;
 		if (cardStyle["border-radius"]) card.style.borderRadius = cardStyle["border-radius"];
@@ -184,200 +184,447 @@ class SuperTextInput extends LitElement {
 	}
 
 	/**
-	 * Apply styles to the text field
-	 * @param {HTMLElement} textField - Text field element to style
+	 * The inner wrapper holds all the flex children (buttons + input). Card
+	 * padding is applied here, NOT on ha-card — that way the buttons and editor
+	 * are inset from the card edges instead of being smashed against them.
 	 */
-	_getTextFieldStyles(textField) {
+	_getInnerStyles(inner) {
+		const cardStyle = this._config.style?.card || {};
+		inner.style.display = "flex";
+		inner.style.flexDirection = "row";
+		inner.style.alignItems = "center";
+		inner.style.height = "100%";
+		inner.style.boxSizing = "border-box";
+		inner.style.padding = cardStyle.padding || DEFAULT_PADDING;
+	}
+
+	/**
+	 * Outer wrapper styles applied directly to the <ha-input> / <ha-textfield>
+	 * element (width, margins, height).
+	 */
+	_applyOuterInputStyles(textField) {
 		const style = this._config.style?.editor || {};
-		const hasLeadingButtons = this._config.buttons?.some((btn) => !btn.position || btn.position === "start");
-
+		const hasLeadingButtons = this._config.buttons?.some(
+			(btn) => !btn.position || btn.position === "start"
+		);
 		const styles = { ...SuperTextInput.TEXT_FIELD_STYLES };
+		if (hasLeadingButtons) styles.marginLeft = styles.offsetLeftMargin;
+		// Accept hyphenated or underscored keys (margin-left / margin_left).
+		const ml = style["margin-left"] ?? style["margin_left"];
+		const mr = style["margin-right"] ?? style["margin_right"];
+		const mt = style["margin-top"] ?? style["margin_top"];
+		const mb = style["margin-bottom"] ?? style["margin_bottom"];
+		if (ml !== undefined) styles.marginLeft = ml;
+		if (mr !== undefined) styles.marginRight = mr;
+		styles.height = style["height"] || styles.height;
+		if (mt !== undefined) textField.style.marginTop = mt;
+		if (mb !== undefined) textField.style.marginBottom = mb;
 
-        
-		if (hasLeadingButtons) {
-			styles.marginLeft = styles.offsetLeftMargin;
-		} 
-        styles.marginLeft = style["margin-left"] || styles.marginLeft;
-        styles.marginRight = style["margin-right"] || styles.marginRight;
-		Object.assign(textField.style, styles);
-
-		textField.updateComplete.then(() => {
-			const mdcTextField = textField.shadowRoot.querySelector(".mdc-text-field");
-			if (mdcTextField) {
-				mdcTextField.style.height = styles.height;
-				if (style.background) mdcTextField.style.background = style.background;
-				mdcTextField.style.paddingLeft = style["padding-left"] || styles.defaultTextLeftPadding;
-			}
-
-			const input = textField.shadowRoot.querySelector(".mdc-text-field__input");
-			if (input) {
-				input.style.alignSelf = "end";
-				input.style.marginBottom = style["margin-bottom"] || styles.defaultTextBottomMargin;
-			}
-
-			const label = textField.shadowRoot.querySelector(".mdc-floating-label");
-			if (label) {
-				label.style.setProperty("left", style["padding-left"] || styles.defaultTextLeftPadding, "important");
-			}
-		});
+		textField.style.width = styles.width;
+		textField.style.marginLeft = styles.marginLeft;
+		textField.style.marginRight = styles.marginRight;
+		// Constrain ha-input to the wa-input height so the visible blue area
+		// matches the buttons. ha-input has a baked-in `padding-bottom: 8px`
+		// that pushes the wrapper to 40px+; strip it.
+		if (INPUT_TAG === "ha-input" && styles.height && styles.height !== "auto") {
+			textField.style.setProperty("height", styles.height, "important");
+			textField.style.setProperty("padding", "0", "important");
+			textField.style.setProperty("box-sizing", "border-box", "important");
+			textField.style.setProperty("display", "flex", "important");
+			textField.style.setProperty("align-items", "stretch", "important");
+		} else if (INPUT_TAG !== "ha-input" && styles.height && styles.height !== "auto") {
+			textField.style.height = styles.height;
+		}
 	}
 
 	/**
-	 * Create the text field element
-	 * @returns {HTMLElement} Configured text field
+	 * Deep shadow-DOM styling.
+	 *
+	 * For HASS 2026.4+ (ha-input → wa-input):
+	 *   Web Awesome's internal stylesheet uses !important AND its CSS custom
+	 *   properties don't trigger live re-evaluation of the rules that consume
+	 *   them. So we inject a CSSStyleSheet directly into wa-input's shadow
+	 *   root with our overrides — adoptedStyleSheets wins the cascade.
+	 *
+	 * For legacy ha-textfield (HASS < 2026.4): probe .mdc-* selectors as before.
 	 */
-	_createTextField() {
-		// Create Home Assistant's material design text field
-		const textField = document.createElement("ha-textfield");
+	async _applyDeepInputStyles() {
+		if (!this._config) return;
+		const textField = this.shadowRoot?.querySelector("#textinput");
+		if (!textField) return;
 
-		// Set up basic field properties from component state
-		textField.label = this.label; // Display label above input
-		textField.value = this.value; // Current input value
-		textField.minlength = this.minlength; // Minimum text length validation
-		textField.maxlength = this.maxlength; // Maximum text length validation
-		textField.autoValidate = this.pattern; // Enable pattern validation
-		textField.pattern = this.pattern; // Regex pattern for validation
-		textField.type = this.mode; // Input type (text, password, etc)
-		textField.id = "textinput"; // ID for DOM queries
-		textField.placeholder = this._config.placeholder || ""; // Placeholder text
+		const style = this._config.style?.editor || {};
+		const styles = { ...SuperTextInput.TEXT_FIELD_STYLES };
+		const userHeight = style["height"];
+		const defaultHeight = this._config.hide_label ? styles.heightNoLabel : styles.height;
+		styles.height = userHeight || defaultHeight;
 
-		// Event Listeners for value changes:
-		// 'change' fires when focus leaves the field (blur)
-		textField.addEventListener("change", this.valueChanged.bind(this));
-		// 'input' fires on every keystroke for real-time updates
-		textField.addEventListener("input", this.inputChanged.bind(this));
-
-		// Apply configured styles to the field
-		this._getTextFieldStyles(textField);
-
-		// Focus Management:
-		// This code maintains cursor position and typing flow during real-time updates
-		if (this._update_mode === "realtime" && this._lastUpdate && Date.now() - this._lastUpdate < 1000) {
-			// Three-part check ensures optimal focus handling:
-			//
-			// 1. Real-time Mode Check (this._update_mode === "realtime")
-			//    - Only needed during immediate keystroke updates
-			//    - Blur mode updates happen after focus is lost, so no restoration needed
-			//
-			// 2. Update Timestamp Check (this._lastUpdate)
-			//    - Verifies we have actually performed an update
-			//    - Prevents unnecessary focus management on initial render
-			//    - Timestamp is set in setValue() during real-time updates
-			//
-			// 3. Time Window Check (Date.now() - this._lastUpdate < 1000)
-			//    - Creates 1-second window for focus restoration
-			//    - Matches natural typing rhythm and update cycles
-			//    - Prevents focus jumps during non-typing interactions
-			//
-			// Focus Restoration (setTimeout):
-			//    - 100ms delay ensures DOM stability after updates
-			//    - Arrow function maintains correct 'this' context
-			//    - Returns cursor to input field for uninterrupted typing
-
-			// this._config.forced_focus_delay is an advanced prop to adjust focus delay
-			setTimeout(() => textField.focus(), this._config.forced_focus_delay || SuperTextInput.DEFAULT_FOCUS_DELAY);
+		// When the user sets line-gap or padding-bottom beyond the built-in
+		// default, bump the wa-input height by the difference so the input
+		// still has vertical space.
+		const showsLabel = !this._config.hide_label && this.label;
+		const userGap = parseFloat(style["line-gap"] || style["padding-bottom"] || 0);
+		const builtinBottom = showsLabel ? 8 : 0;
+		const heightBump = Math.max(0, userGap - builtinBottom);
+		if (heightBump && !userHeight) {
+			styles.height = `calc(${defaultHeight} + ${heightBump}px)`;
 		}
 
-		return textField;
+		if (textField.updateComplete) await textField.updateComplete;
+		if (!textField.shadowRoot) return;
+
+		// ─── Web Awesome path (HASS 2026.4+) ───
+		const waInput = textField.shadowRoot.querySelector("wa-input");
+		if (waInput) {
+			// Height: inline on the wa-input element (the only knob that works).
+			waInput.style.height = styles.height;
+
+			// All other overrides go through an injected stylesheet — that's the
+			// only thing that reliably wins against wa-input's bundled CSS.
+			if (waInput.updateComplete) await waInput.updateComplete;
+			this._injectWaStyles(waInput, style);
+			return;
+		}
+
+		// ─── Legacy MDC path (HASS < 2026.4) ───
+		const mdcTextField = textField.shadowRoot.querySelector(".mdc-text-field");
+		if (mdcTextField) {
+			mdcTextField.style.height = styles.height;
+			if (style.background) mdcTextField.style.background = style.background;
+			mdcTextField.style.paddingLeft =
+				style["padding-left"] || styles.defaultTextLeftPadding;
+		}
+		const input = textField.shadowRoot.querySelector(".mdc-text-field__input");
+		if (input) {
+			input.style.alignSelf = "end";
+			input.style.marginBottom =
+				style["margin-bottom"] || styles.defaultTextBottomMargin;
+		}
+		const label = textField.shadowRoot.querySelector(".mdc-floating-label");
+		if (label) {
+			label.style.setProperty(
+				"left",
+				style["padding-left"] || styles.defaultTextLeftPadding,
+				"important"
+			);
+		}
 	}
 
 	/**
-	 * Render the card
-	 * @returns {TemplateResult} Card template
+	 * Build (or rebuild) and inject a CSSStyleSheet into wa-input's shadow root.
+	 * This is the only reliable way to override wa-input's bundled CSS — its
+	 * custom properties don't trigger live re-evaluation of the consuming rules.
 	 */
+	_injectWaStyles(waInput, style) {
+		const padAll = style["padding"];
+		// If only padding-left is set, mirror it onto padding-right too (legacy
+		// behavior). If padding-right is explicitly set, use that.
+		const padLeft = style["padding-left"];
+		const padRight = style["padding-right"];
+		const padTop = style["padding-top"];
+		const padBottom = style["padding-bottom"];
+		// Push the text up away from the underline drawn at [part=base]::after
+		const lineGap = style["line-gap"];
 
+		const bg = style.background;
+		const labelColor = style["label-color"];
+		const valueColor = style.color;
+		const valueFontWeight = style["font-weight"];
+		const valueFontSize = style["font-size"];
+		const placeholderColor = style["placeholder-color"];
+		const lineColor = style["line-color"]; // the ::after horizontal line
+		const borderColor = style["border-color"];
+		const borderRadius = style["border-radius"];
+		const borderWidth = style["border-width"];
+
+		// Optional label-tightening (was forced default; now opt-in via
+		// style.editor.label-padding-top / label-padding-bottom / label-line-height).
+		const labelPadTop = style["label-padding-top"];
+		const labelPadBot = style["label-padding-bottom"];
+		const labelPadLeft = style["label-padding-left"];
+		const labelPadRight = style["label-padding-right"];
+		const labelLineHeight = style["label-line-height"];
+		const labelFontSize = style["label-font-size"];
+		const labelFontWeight = style["label-font-weight"];
+
+		// Force the label into a "small, floated" state so it sits compactly
+		// at the top with breathing room — matching the README's old MDC look
+		// rather than wa-input's natural taller stacked rendering.
+		const showLabel = !this._config.hide_label && this.label;
+		const rules = [];
+		const labelProps = [];
+		if (showLabel) {
+			labelProps.push(`padding-top: ${labelPadTop || "4px"} !important`);
+			labelProps.push(`padding-bottom: ${labelPadBot || "0"} !important`);
+			labelProps.push(`padding-left: ${labelPadLeft || "8px"} !important`);
+			labelProps.push(`font-size: ${labelFontSize || "10px"} !important`);
+			labelProps.push(`line-height: ${labelLineHeight || "1.2"} !important`);
+		} else {
+			if (labelPadTop) labelProps.push(`padding-top: ${labelPadTop} !important`);
+			if (labelPadBot) labelProps.push(`padding-bottom: ${labelPadBot} !important`);
+			if (labelPadLeft) labelProps.push(`padding-left: ${labelPadLeft} !important`);
+			if (labelFontSize) labelProps.push(`font-size: ${labelFontSize} !important`);
+			if (labelLineHeight) labelProps.push(`line-height: ${labelLineHeight} !important`);
+		}
+		if (labelPadRight) labelProps.push(`padding-right: ${labelPadRight} !important`);
+		if (labelFontWeight) labelProps.push(`font-weight: ${labelFontWeight} !important`);
+		if (labelColor) labelProps.push(`color: ${labelColor} !important`);
+		if (labelProps.length) rules.push(`label.label { ${labelProps.join("; ")}; }`);
+		if (bg) rules.push(`[part="base"] { background: ${bg} !important; background-color: ${bg} !important; }`);
+
+		// Padding controls on [part=base]: padding-left/right control where the
+		// text starts/ends horizontally; padding-top/bottom control the vertical
+		// gap inside the input box. line-gap is a convenience alias for
+		// padding-bottom that's named for its visual effect.
+		// Default padding when a label is visible:
+		//   padding-top: 20px clears the floated label
+		//   padding-bottom: 2px is the tiny gap above the underline
+		//   padding-left: 8px positions the value text
+		// padding-top must clear the floated label area when one is visible;
+		// otherwise no top inset is needed. padding-bottom (gap to underline)
+		// and padding-left (value horizontal position) stay constant — toggling
+		// hide_label shouldn't shift the value text around.
+		// vertical-align: center|top|bottom controls where the value text sits
+		// inside the editor area. Defaults to bottom (the README-classic look,
+		// aligned just above the underline). Useful in hide_label / slim cards
+		// where the value should sit in the visual center of the pill.
+		const valign = style["vertical-align"] ?? style["vertical_align"];
+		const isCentered = valign === "center" || valign === "middle";
+		const defaultPadTop = showLabel ? "20px" : null;
+		// When centering, drop the default bottom inset so the symmetric
+		// padding actually centers the text. Users can still override.
+		const defaultPadBottom = isCentered ? "0" : "2px";
+		const defaultPadLeft = "8px";
+		const effPadTop = padTop || defaultPadTop;
+		const effPadBottom = padBottom || lineGap || defaultPadBottom;
+		const effPadLeft = padLeft || defaultPadLeft;
+
+		const baseProps = [
+			`box-sizing: border-box !important`,
+			`height: 100% !important`,
+		];
+		if (padAll) baseProps.push(`padding: ${padAll} !important`);
+		if (effPadLeft) baseProps.push(`padding-left: ${effPadLeft} !important`);
+		if (padRight) baseProps.push(`padding-right: ${padRight} !important`);
+		else if (padLeft) baseProps.push(`padding-right: ${padLeft} !important`);
+		if (effPadTop) baseProps.push(`padding-top: ${effPadTop} !important`);
+		if (effPadBottom) baseProps.push(`padding-bottom: ${effPadBottom} !important`);
+		if (borderColor) baseProps.push(`border-color: ${borderColor} !important`);
+		// Default border-radius: 4px on the editor area per simple-example.
+		baseProps.push(`border-radius: ${borderRadius || "4px"} !important`);
+		if (borderWidth) baseProps.push(`border-width: ${borderWidth} !important`);
+		if (baseProps.length) rules.push(`[part="base"] { ${baseProps.join("; ")}; }`);
+
+		// Strip wa-input's built-in padding on the input element, tighten its
+		// line-height, and align it to the bottom of [part="base"]. With
+		// these defaults, `padding-bottom: 0` on the base truly puts the
+		// value text on the underline. vertical-align swaps the align-self
+		// so the input sits at top / center / bottom of [part="base"].
+		const alignSelf = isCentered
+			? "center"
+			: valign === "top" || valign === "start"
+			? "flex-start"
+			: "flex-end";
+		const inputProps = [
+			`padding-top: 0 !important`,
+			`padding-bottom: 0 !important`,
+			`line-height: 1.2 !important`,
+			`align-self: ${alignSelf} !important`,
+			`height: auto !important`,
+		];
+		if (valueColor) inputProps.push(`color: ${valueColor} !important`);
+		if (valueFontWeight) inputProps.push(`font-weight: ${valueFontWeight} !important`);
+		if (valueFontSize) inputProps.push(`font-size: ${valueFontSize} !important`);
+		if (inputProps.length) rules.push(`[part="input"] { ${inputProps.join("; ")}; }`);
+		if (placeholderColor) rules.push(
+			`[part="input"]::placeholder { color: ${placeholderColor} !important; }`
+		);
+		if (lineColor) rules.push(
+			`[part="base"]::after { background: ${lineColor} !important; background-color: ${lineColor} !important; }`
+		);
+
+		const cssText = rules.join("\n");
+		try {
+			let sheet = waInput._stiSheet;
+			if (!sheet) {
+				sheet = new CSSStyleSheet();
+				waInput._stiSheet = sheet;
+				waInput.shadowRoot.adoptedStyleSheets = [
+					...waInput.shadowRoot.adoptedStyleSheets,
+					sheet,
+				];
+			}
+			sheet.replaceSync(cssText);
+		} catch (e) {
+			// CSSStyleSheet constructor unavailable in very old browsers — ignore.
+		}
+	}
+
+	/**
+	 * Build & cache button containers — only rebuilt when setConfig clears the cache.
+	 * Keeping these as raw DOM nodes (not Lit templates) means re-renders won't
+	 * tear them down, which keeps things snappy.
+	 */
+	_getButtonContainer(isEnd) {
+		if (!this._config.buttons || !this._buttonFactory) return "";
+		const cacheKey = isEnd ? "_trailingContainer" : "_leadingContainer";
+		if (!this[cacheKey]) {
+			this[cacheKey] = this._buttonFactory.createButtonContainer(isEnd, this._config.buttons);
+		}
+		return this[cacheKey];
+	}
+
+	/**
+	 * Render with a real Lit template — Lit reconciles the input element
+	 * across re-renders so focus and caret position are preserved while typing.
+	 * This fixes:
+	 *   - the "iPhone keyboard closes too quickly" report (#1)
+	 *   - the "can't type a space" report (#2) caused by mid-render DOM replacement
+	 */
 	render() {
-		const card = document.createElement("ha-card");
-		this._getCardStyles(card);
-		console.log("rendering-card");
-		// create the leading buttons, if any
-		if (this._config.buttons) {
-			card.appendChild(this._buttonFactory.createButtonContainer(false, this._config.buttons));
+		if (!this._config) return html``;
+
+		const leading = this._getButtonContainer(false);
+		const trailing = this._getButtonContainer(true);
+		const placeholder = this._config.placeholder || "";
+		// When hide_label is set, the wa-input collapses to just the input row
+		// (~36-40px tall). Useful for slim layouts that match the pre-2026.4 look.
+		const labelText = this._config.hide_label ? "" : this.label;
+		// compact_buttons: pierce ha-icon-button's shadow via ::part(base) to
+		// strip the 48px Material Design touch target so buttons sit tight.
+		// Opt-in — default behavior preserves accessibility on touch.
+		const compactCss = this._config.compact_buttons
+			? html`
+					<style>
+						ha-icon-button::part(base) {
+							width: 100% !important;
+							height: 100% !important;
+							padding: 0 !important;
+							min-width: 0 !important;
+							min-height: 0 !important;
+							box-sizing: border-box !important;
+						}
+					</style>
+			  `
+			: "";
+
+		return INPUT_TAG === "ha-input"
+			? html`
+					${compactCss}
+					<ha-card>
+						<div id="sti-inner">
+							${leading}
+							<ha-input
+								id="textinput"
+								.label=${labelText}
+								.value=${this.value || ""}
+								.minlength=${this.minlength}
+								.maxlength=${this.maxlength}
+								.autoValidate=${!!this.pattern}
+								.pattern=${this.pattern || ""}
+								.type=${this.mode || "text"}
+								placeholder=${placeholder}
+								@change=${this.valueChanged}
+								@input=${this.inputChanged}
+							></ha-input>
+							${trailing}
+						</div>
+					</ha-card>
+			  `
+			: html`
+					${compactCss}
+					<ha-card>
+						<div id="sti-inner">
+							${leading}
+							<ha-textfield
+								id="textinput"
+								.label=${labelText}
+								.value=${this.value || ""}
+								.minlength=${this.minlength}
+								.maxlength=${this.maxlength}
+								.autoValidate=${!!this.pattern}
+								.pattern=${this.pattern || ""}
+								.type=${this.mode || "text"}
+								placeholder=${placeholder}
+								@change=${this.valueChanged}
+								@input=${this.inputChanged}
+							></ha-textfield>
+							${trailing}
+						</div>
+					</ha-card>
+			  `;
+	}
+
+	updated(changedProps) {
+		if (super.updated) super.updated(changedProps);
+
+		// Card styles only need to be applied once after first paint
+		// (and re-applied if config changes — setConfig clears the flag).
+		if (!this._cardStylesApplied) {
+			const card = this.shadowRoot?.querySelector("ha-card");
+			const inner = this.shadowRoot?.querySelector("#sti-inner");
+			if (card && inner) {
+				this._getCardStyles(card);
+				this._getInnerStyles(inner);
+				this._cardStylesApplied = true;
+			}
 		}
 
-		// create the text field
-		card.appendChild(this._createTextField());
+		// Outer input styles: cheap, run every update so margin recalc on
+		// button toggle stays in sync.
+		const textField = this.shadowRoot?.querySelector("#textinput");
+		if (textField) this._applyOuterInputStyles(textField);
 
-		// create the trailing buttons, if any
-		if (this._config.buttons) {
-			card.appendChild(this._buttonFactory.createButtonContainer(true, this._config.buttons));
+		// Deep shadow-DOM styles only run when config (and therefore style)
+		// changes — re-renders driven by `value` updates skip this.
+		if (changedProps.has("_config")) {
+			this._applyDeepInputStyles();
 		}
-
-		return html`${card}`;
 	}
 
 	/**
-	 * Updates the entity value in Home Assistant and handles related actions
-	 * @param {string} value - The new value to set
+	 * Push the new value to Home Assistant.
 	 */
 	setValue(value) {
-		// Only proceed if the value has actually changed
+		if (!this.stateObj) return;
 		if (this.stateObj.state !== value) {
-			// Flag to prevent feedback loop when value updates come back from HA
 			this._internalChange = true;
-
-			// Call Home Assistant service to update the entity
-			// Uses the entity type (input_text, text, etc) to determine correct service
 			this._hass.callService(this._entityType, "set_value", {
 				entity_id: this._config.entity,
 				value: value,
 			});
-
-			// If a change action is configured (like a script or service call)
-			// trigger it with the new value
 			if (this._config.change_action) {
 				handleAction(this._config.change_action, value, this);
-			}
-
-			// In realtime mode, track when the last update occurred
-			// Used to force focus after updates
-			if (this._update_mode === "realtime") {
-				this._lastUpdate = Date.now();
 			}
 		}
 	}
 
-	/**
-	 * Handles real-time input changes and debouncing
-	 * @param {Event} ev - Input event from text field
-	 */
 	inputChanged(ev) {
-		// Only process changes in realtime mode
 		if (this._update_mode !== "realtime") return;
-
-		// Get the current input value
 		const value = ev.target.value;
-
-		// Empty values are updated immediately
 		if (value === "") {
 			this.setValue(value);
 		} else {
-			// Non-empty values use debounced update to prevent too frequent updates
 			this._debouncedUpdate(value);
 		}
 	}
 
-	/**
-	 * Handle value changes on blur
-	 * @param {Event} ev - Change event
-	 */
 	valueChanged(ev) {
 		const value = this.shadowRoot.querySelector("#textinput").value;
 		this.setValue(value);
 	}
 }
 
-// Register the custom element and editor xx
 customElements.define("super-text-input", SuperTextInput);
 
-// Register card for UI editor
 window.customCards = window.customCards || [];
 window.customCards.push({
 	type: "super-text-input",
 	name: "Super Text Input",
-	description: "A text input card with enhanced features - such as real-time input, icons, buttons and actions",
+	description:
+		"A text input card with enhanced features - real-time input, icons, buttons and actions",
 	preview: "/local/community/super-text-input/preview.png",
 	configurable: true,
-	version: "0.1.0",
+	version: "0.3.16",
 	customElement: true,
 });
