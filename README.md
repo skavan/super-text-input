@@ -44,9 +44,26 @@ Most existing YAML continues to work. A few defaults shifted:
 
 If you were on v0.1 or v0.2 and your card looked exactly the way you wanted, double-check it after upgrading — small pixel shifts are possible. Everything is overridable.
 
-## Installation (not in HACS, yet…)
+## Installation
 
-1. Download the files to your `config/www/community/super-text-input/` directory.
+### Via HACS (recommended)
+
+This repo isn't in the HACS default list yet, but you can install it as a **custom repository** in one click:
+
+1. Open HACS in Home Assistant.
+2. Click the **⋮ menu** (top-right) → **Custom repositories**.
+3. **Repository:** `https://github.com/skavan/super-text-input`
+4. **Type:** `Dashboard`
+5. Click **Add**.
+6. Find **Super Text Input** in the HACS list and click **Download**.
+7. Add the resource — HACS may do this for you automatically. If not, see the manual install step 2 below.
+8. Hard-refresh your browser (Ctrl/Cmd+Shift+R).
+
+When a new release ships, HACS will surface an update notification.
+
+### Manual install
+
+1. Download the files (`super-text-input.js`, `card-utils.js`, `editor.js`, `base-editor.js`, `preview.png`) to your `config/www/community/super-text-input/` directory.
 2. Add the resource in your dashboard configuration. Two ways:
     - **Using the UI:** _Settings_ → _Dashboards_ → _More Options icon_ → _Resources_ → _Add Resource_ → Set _Url_ to `/local/community/super-text-input/super-text-input.js` → Set _Resource type_ to `JavaScript Module`.
       **Note:** If you don't see the Resources menu, enable _Advanced Mode_ in your _User Profile_.
