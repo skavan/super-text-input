@@ -24,9 +24,9 @@ import {
 	debounce,
 	computeStateName,
 	normalizeStyleKeys,
-} from "./card-utils.js?v=0.3.22";
+} from "./card-utils.js?v=0.3.26-d";
 
-import "./editor.js?v=0.3.22";
+import "./editor.js?v=0.3.26-d";
 
 // Get LitElement base class from Home Assistant frontend
 const LitElement = customElements.get("home-assistant-main")
@@ -191,6 +191,15 @@ class SuperTextInput extends LitElement {
 			? SuperTextInput.DEFAULT_CARD_HEIGHT_NO_LABEL
 			: SuperTextInput.DEFAULT_CARD_HEIGHT;
 
+		// Default min-width: 0 on the host and ha-card so the card participates
+		// correctly in CSS Grid `1fr` tracks (and any flex container with
+		// shrinking siblings). Without this, the card's intrinsic min-content
+		// width (~200px from wa-input internals) becomes a hidden floor that
+		// refuses to shrink, pushing sibling buttons/cards off-screen on
+		// narrow viewports. Users can override via style.card.min-width.
+		this.style.minWidth = "0";
+		card.style.minWidth = cardStyle["min-width"] || "0";
+
 		// ha-card is now just a chrome container: bg + border + radius + outer
 		// height. The inner flex layout (with padding around the children) lives
 		// in a separate <div id="sti-inner"> child — see _getInnerStyles.
@@ -202,6 +211,16 @@ class SuperTextInput extends LitElement {
 		if (cardStyle.background) card.style.background = cardStyle.background;
 		if (cardStyle["border-radius"]) card.style.borderRadius = cardStyle["border-radius"];
 		if (cardStyle.border) card.style.border = cardStyle.border;
+
+		// Optional width / max-width — applied to the host so they participate
+		// correctly with the grid/flex layout the card sits in. Use width for
+		// a fixed footprint, max-width to cap growth in `1fr` tracks.
+		// The host element defaults to `display: inline` (Lit's default for
+		// custom elements), which makes `width` a no-op — so we force
+		// `display: block` whenever width or max-width is set.
+		if (cardStyle.width || cardStyle["max-width"]) this.style.display = "block";
+		if (cardStyle.width) this.style.width = cardStyle.width;
+		if (cardStyle["max-width"]) this.style.maxWidth = cardStyle["max-width"];
 	}
 
 	/**
@@ -217,6 +236,9 @@ class SuperTextInput extends LitElement {
 		inner.style.height = "100%";
 		inner.style.boxSizing = "border-box";
 		inner.style.padding = cardStyle.padding || DEFAULT_PADDING;
+		// Match the host min-width: 0 so the flex container itself can shrink
+		// (without this, the flex container would honor children's min-content).
+		inner.style.minWidth = "0";
 	}
 
 	/**
@@ -669,6 +691,6 @@ window.customCards.push({
 		"A text input card with enhanced features - real-time input, icons, buttons and actions",
 	preview: "/local/community/super-text-input/preview.png",
 	configurable: true,
-	version: "0.3.22",
+	version: "0.3.26",
 	customElement: true,
 });

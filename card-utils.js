@@ -293,8 +293,34 @@ export class ButtonFactory {
 		// implementation detail. If HA swaps to mwc-ripple/md-ripple or
 		// renames the pseudo, this rule becomes a no-op (hover reverts to
 		// default circle); it won't error.
-		const outerCss = `ha-button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; ${radiusRule} } ha-button::after, ha-button::before { border-radius: ${radius} !important; }`;
-		const innerCss = `[part="base"], button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; box-sizing: border-box !important; ${radiusRule} }`;
+		const outerCss = `ha-button { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; ${radiusRule} } ha-button::after, ha-button::before { border-radius: ${radius} !important; }`;
+		// Inner button (inside ha-button's shadow): the native <button class="has-label">
+		// uses baseline alignment by default, so the slotted ha-icon sits ~3px below
+		// center. Force flex-center on the button itself AND on the .label slot so
+		// the icon centers properly even when the outer host has a border (which
+		// shrinks the content area asymmetrically vs MD's default 48px touch target).
+		const innerCss = `
+			:host {
+				display: inline-flex !important;
+				align-items: center !important;
+				justify-content: center !important;
+				padding: 0 !important;
+				margin: 0 !important;
+			}
+			[part="base"], button {
+				width: 100% !important;
+				height: 100% !important;
+				min-width: 0 !important;
+				min-height: 0 !important;
+				padding: 0 !important;
+				margin: 0 !important;
+				box-sizing: border-box !important;
+				display: inline-flex !important;
+				align-items: center !important;
+				justify-content: center !important;
+				${radiusRule}
+			}
+		`;
 
 		// Cancel any in-flight retry chain from a previous call so we don't
 		// leave parallel chains racing on the same button after rapid

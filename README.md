@@ -159,6 +159,9 @@ All keys accept either hyphenated CSS form (`padding-left`) or underscored (`pad
 | `background` | – | Card background |
 | `border-radius` | – | Card corner radius |
 | `border` | – | Full CSS border shorthand |
+| `width` | – | Optional fixed card width — applied to the host |
+| `max-width` | – | Optional cap on card growth in `1fr` tracks |
+| `min-width` | `0` | Floors the card's shrinkability — leave `0` so the card participates in grid `1fr` tracks |
 
 #### `style.editor`
 

@@ -4,6 +4,26 @@ All notable changes to this project. Versioning is loosely SemVer — minor bump
 back-compatible additions, patch bumps are fixes, anything that shifts a default look
 is called out in the README's [Breaking changes](README.md#-breaking-changes) section.
 
+## v0.3.26
+
+### Fixed
+- **Compact button icons now center correctly inside `ha-button`.** The icon was sitting ~2–3 px below the button's visual center, most obvious on small bordered buttons (`border: 1.5px solid green` style rings). Root cause: `ha-button` ships a `:host { display: inline-block }` rule inside its own shadow, which kept the inner `<button>` at its natural top-aligned position regardless of external overrides. `_injectCompactButtonStyles` now injects `:host { display: inline-flex; align-items: center; justify-content: center }` *inside* `ha-button`'s shadow (the only way to beat the built-in `:host` rule), plus the same flex-center on the inner native `<button>`. Icon offset measured 0.00 px after the fix. No YAML changes required.
+
+## v0.3.25
+
+### Fixed
+- **`style.card.width` and `style.card.max-width` actually take effect.** The host element defaults to `display: inline` (Lit's default), which makes `width` a no-op. We now force `display: block` whenever width or max-width is set.
+
+## v0.3.24
+
+### Added
+- **`style.card.width` and `style.card.max-width`** — applied to the host element so they participate correctly with the grid/flex layout the card sits in. Use `width` for a fixed footprint, `max-width` to cap growth in `1fr` tracks. Defaults are unset so v0.3.23 shrink behaviour stays in place when neither is specified.
+
+## v0.3.23
+
+### Fixed
+- **Card now shrinks correctly in CSS Grid `1fr` tracks.** Previously the card had an intrinsic ~200px min-content width (inherited from wa-input's internals) that became a hidden floor inside grids. With siblings (e.g. external buttons), a `1fr` track wouldn't shrink below the card's content, pushing siblings off-screen on narrow viewports. Default `min-width: 0` on the host + ha-card + inner wrapper now lets the card participate in any flex/grid layout. Users can override with `style.card.min-width` if they want a floor.
+
 ## v0.3.22
 
 ### Changed
