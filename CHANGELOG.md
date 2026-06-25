@@ -4,6 +4,12 @@ All notable changes to this project. Versioning is loosely SemVer — minor bump
 back-compatible additions, patch bumps are fixes, anything that shifts a default look
 is called out in the README's [Breaking changes](README.md#-breaking-changes) section.
 
+## v0.3.27
+
+### Fixed
+- **Button `tap_action` with `{{ value }}` now uses the live input value (issue [#5](https://github.com/skavan/super-text-input/issues/5)).** Previously the click handler read `this._element.value` — the Lit reactive property, which only updates after Home Assistant pushes the entity state back. With `update_mode: blur` (default), the button click triggers blur → service-call → HA round-trip, but the click handler runs before that round-trip completes, so `{{ value }}` substituted the **stale** previous value (or empty string on first use). The handler now reads from the live DOM `<input>` element instead, so whatever the user just typed comes through correctly.
+- **`{{ value }}` substitution is also now safe for special characters.** The old path did `JSON.stringify(actionConfig).replace(...).JSON.parse(...)` — typing `"` or `\` would silently break the JSON roundtrip and the action would fire with garbage or not fire at all. The substitution now walks the action config object and only touches string leaves, so any character is preserved verbatim.
+
 ## v0.3.26
 
 ### Fixed

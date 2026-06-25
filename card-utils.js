@@ -162,10 +162,28 @@ export function getContainerStyles(container, isEnd = false) {
  * @param {string} value - Current value
  * @param {HTMLElement} element - Element to dispatch event from
  */
+// Walk an action config and replace `{{ value }}` (with optional whitespace)
+// inside every string leaf. Safer than the old JSON.stringify → regex → JSON.parse
+// path because the user's typed value may contain `"`, `\`, or control characters
+// that would break the JSON roundtrip silently. Issue #5.
+function _substituteValue(node, value) {
+	if (typeof node === "string") {
+		return node.replace(/\{\{\s*value\s*\}\}/g, value);
+	}
+	if (Array.isArray(node)) return node.map((item) => _substituteValue(item, value));
+	if (node && typeof node === "object") {
+		const out = {};
+		for (const k of Object.keys(node)) out[k] = _substituteValue(node[k], value);
+		return out;
+	}
+	return node;
+}
+
 export function handleAction(actionConfig, value, element) {
 	if (!actionConfig) return;
 
-	const processedConfig = JSON.parse(JSON.stringify(actionConfig).replace(/\{\{\s*value\s*\}\}/g, value));
+	const safeValue = value == null ? "" : String(value);
+	const processedConfig = _substituteValue(actionConfig, safeValue);
 
 	const event = new Event("hass-action", {
 		bubbles: true,
@@ -385,11 +403,20 @@ export class ButtonFactory {
 	 */
 	_setupButtonAction(button, config) {
 		button.addEventListener("click", () => {
+			// Read the LIVE value from the DOM input element, not the Lit reactive
+			// property. `this._element.value` only updates when HA pushes the
+			// entity state back — in `update_mode: blur`, the click-triggered
+			// blur → service-call → HA round-trip hasn't completed by the time
+			// this handler runs, so the property is stale and `{{ value }}`
+			// would substitute the OLD value (or empty string). Issue #5.
+			const inputEl = this._element.shadowRoot?.querySelector("#textinput");
+			const currentValue = inputEl?.value ?? this._element.value ?? "";
+
 			if (config.tap_action) {
-				handleAction(config.tap_action, this._element.value, this._element);
+				handleAction(config.tap_action, currentValue, this._element);
 			} else if (config.template && PREBUILT_ACTIONS(this._config.entity)[config.template]) {
 				const entity = config.entity || this._config.entity;
-				handleAction(PREBUILT_ACTIONS(entity)[config.template], this._element.value, this._element);
+				handleAction(PREBUILT_ACTIONS(entity)[config.template], currentValue, this._element);
 
 			}
 			// If no tap_action and no template or invalid template button has no action
