@@ -311,7 +311,7 @@ The MD hover overlay used to always be a circle, even when the button was a roun
 
 ## Recipes
 
-Four common looks. The full set lives in [`sample-yaml.yaml`](sample-yaml.yaml).
+Five common looks. The full set lives in [`sample-yaml.yaml`](sample-yaml.yaml).
 
 ### 1. Icons + green-bordered info button
 
@@ -463,6 +463,48 @@ style:
     color: '#f1f5f9'                      # near-white value text on dark bg
     placeholder-color: '#64748b'          # muted placeholder
     line-color: '#60a5fa'                 # blue underline matches the label
+```
+
+### 5. Fixed / capped card width (v0.3.24)
+
+Pin a card to a fixed `width`, or cap it with `max-width` so it can still shrink in a `1fr` grid track. Both are applied to the host element so they participate correctly with whatever flex/grid container the card sits in.
+
+```yaml
+# Fixed 220px footprint — never grows, never shrinks
+type: custom:super-text-input
+entity: input_text.sti_test
+placeholder: fixed 220 px
+hide_label: true
+style:
+  card:
+    width: 220px
+    background: '#fef3c7'
+    border-radius: 16px
+    padding: 6px
+  editor:
+    vertical-align: center
+    color: '#78350f'
+    placeholder-color: '#92400e'
+    line-color: transparent
+    padding-left: 10px
+
+# Capped at 300px — full width up to 300, shrinks below in narrow tracks
+type: custom:super-text-input
+entity: input_text.sti_test
+placeholder: max 300 px, shrinks below
+hide_label: true
+style:
+  card:
+    max-width: 300px
+    background: '#dbeafe'
+    border-radius: 16px
+    padding: 6px
+  editor:
+    vertical-align: center
+    color: '#1e3a8a'
+    placeholder-color: '#3b82f6'
+    line-color: transparent
+    padding-left: 10px
 ```
 
 ## Forward-compatibility notes

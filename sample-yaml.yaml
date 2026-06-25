@@ -1,93 +1,147 @@
+# Super Text Input — example dashboard
+#
+# Drop this into a Lovelace dashboard (Edit Dashboard → Raw configuration editor)
+# to get a 12-section showcase grid covering the full v0.3.x feature set:
+# slim mode, label/value styling, padding/line controls, vertical-align,
+# compact buttons, hover-shape, grid-shrink (v0.3.23), width/max-width (v0.3.24),
+# and compact-button icon centering (v0.3.26).
+#
+# Replace `input_text.sti_test` with any input_text or text helper of your own.
+
 views:
   - type: sections
+    title: super-text-input
+    max_columns: 2
     sections:
       - type: grid
         cards:
+          - type: heading
+            heading: Super Text Input — examples
+            heading_style: title
           - type: markdown
-            content: '## Super Text Input — v0.3.9 Test Grid'
-          - type: markdown
-            content: '### minimalist - no styling'
+            content: |
+              Showcases the v0.3.x feature set: slim mode, label/value styling,
+              padding/line controls, vertical-align, compact buttons, hover-shape,
+              and the v0.3.23 grid-shrink + v0.3.24 width/max-width keys. Each card
+              below mirrors a recipe from `sample-yaml.yaml`.
 
+      # 1 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 1. Minimalist
+            heading_style: subtitle
+          - type: markdown
+            content: '_No styling at all. Just `hide_label: true` for the slim row look._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             placeholder: search...
             hide_label: true
 
+      # 2 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 2. Default touch target + normal buttons
+            heading_style: subtitle
           - type: markdown
-            content: '### icons + buttons - normal + compact mode'
-
+            content: |
+              _`compact_buttons: false` (the default). Each button has a 48 px invisible
+              touch zone for accessible tap targets, regardless of the icon size.
+              Buttons sit ~14 px apart because the touch zones consume the space.
+              Recommended for mobile UX._
           - type: custom:super-text-input
             entity: input_text.sti_test
-            label: icons and buttons
+            label: default + normal
             compact_buttons: false
             buttons:
               - id: edit
                 icon: mdi:text-box-edit
                 position: start
-                size: 28px
-                icon_size: 20px
-                
               - id: clear
                 icon: mdi:close
                 position: end
-                size: 22px
-                icon_size: 16px
                 template: clear
                 style:
                   background: transparent
                   color: grey
-                  margin_left: 2px
-                  margin_right: 4px
               - id: info
                 icon: mdi:information-outline
                 position: end
-                size: 28px
-                icon_size: 18px
                 template: more-info
                 style:
                   background: transparent
                   color: green
                   border: 1.5px solid green
-                  margin_left: 4px
-                  margin_right: 0px
-            content: |-
-              ---
+
+      # 3 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 3. Compact mode (compact in every way)
+            heading_style: subtitle
+          - type: markdown
+            content: |
+              _`compact_buttons: true` plus a short card (`height: 40px`), reduced
+              card padding, tighter editor margins, and small buttons. Everything
+              pulled in — the input + buttons sit in a slim row instead of MD's
+              default 56 px touch-friendly card._
           - type: custom:super-text-input
             entity: input_text.sti_test
-            label: negative margin
+            label: compact
             compact_buttons: true
             buttons:
               - id: edit
                 icon: mdi:text-box-edit
                 position: start
-                
+                size: 24px
+                icon_size: 16px
               - id: clear
                 icon: mdi:close
                 position: end
-                icon_size: 16px
+                size: 22px
+                icon_size: 14px
+                template: clear
                 style:
                   background: transparent
                   color: grey
-                  margin_left: -32px                 
-                template: clear
+                  margin-left: 2px
+                  margin-right: 2px
               - id: info
                 icon: mdi:information-outline
                 position: end
+                size: 24px
+                icon_size: 14px
                 template: more-info
                 style:
                   background: transparent
                   color: green
-                  border: 1px solid lightgray
-                  border-radius: 12px
-                  margin_left: 2px
-                  margin_right: 0px
-            content: |-
-              ---    
-              
-              
+                  border: 1.5px solid green
+                  margin-left: 4px
+            style:
+              card:
+                height: 44px
+                padding: 4px
+              editor:
+                height: 36px
+                font-size: 14px
+                label-font-size: 11px
+                label-line-height: 1
+                label-padding-top: 2px
+                padding-bottom: 4px
+                padding-left: 4px
+                padding-right: 0px
+                margin-left: 2px
+                margin-right: 0px
+
+      # 4 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 4. Shaded editor (realtime)
+            heading_style: subtitle
           - type: markdown
-            content: '### more styling examples'
-          
+            content: '_`update_mode: realtime` with 1 s debounce. Light blue editor background via `style.editor.background`._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             name: my name
@@ -98,6 +152,15 @@ views:
             style:
               editor:
                 background: aliceblue
+
+      # 5 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 5. Bubble Card
+            heading_style: subtitle
+          - type: markdown
+            content: '_White pill, transparent editor, bold green leading button that fires a `browser_mod` toast._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             label: Bubble Card
@@ -130,11 +193,19 @@ views:
                 height: 100%
                 background: transparent
                 padding-left: 8px
-                label-font-size: 12px     
+                label-font-size: 12px
                 label-font-weight: 600
                 margin-left: 6px
                 margin-right: 24px
 
+      # 6 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 6. Google-style pill
+            heading_style: subtitle
+          - type: markdown
+            content: '_Slim pill, `vertical-align: center` puts the text in the visual middle, `line-color: transparent` hides the underline. v0.3.15+._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             placeholder: Search…(vertically centered)
@@ -147,7 +218,6 @@ views:
                 size: 28px
                 icon_size: 18px
                 style:
-                  
                   padding-right: 0px
                   background: transparent
                   color: '#5f6368'
@@ -175,8 +245,14 @@ views:
                 line-color: transparent
                 margin-left: 0px
 
-          
-
+      # 7 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 7. WhatsApp chat pill
+            heading_style: subtitle
+          - type: markdown
+            content: '_Trailing send icon, transparent underline. `padding-bottom: 11 px` lifts the value text into the visual centre without using `vertical-align`._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             placeholder: Ask anything…WhatsApp
@@ -206,9 +282,14 @@ views:
                 padding-bottom: 11px
                 line-color: transparent
 
+      # 8 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 8. Dark Notes
+            heading_style: subtitle
           - type: markdown
-            content: '### dark examples'
-
+            content: '_Tall dark notes card with blue label + underline. Demonstrates `label-color`, `label-font-size`, `placeholder-color`, `line-color`._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             label: Dark Notes
@@ -218,7 +299,7 @@ views:
                 height: 80px
                 padding: 12px
                 background: '#1e293b'
-                border-radius: 14px 
+                border-radius: 14px
               editor:
                 background: transparent
                 label-color: '#60a5fa'
@@ -228,6 +309,14 @@ views:
                 placeholder-color: '#64748b'
                 line-color: '#60a5fa'
 
+      # 9 ────────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 9. Artist (asymmetric)
+            heading_style: subtitle
+          - type: markdown
+            content: '_Outer dim card with a darker inner editor that has its own border-radius. Shows `label-padding-top/left` and asymmetric padding._'
           - type: custom:super-text-input
             entity: input_text.sti_test
             label: Artist
@@ -246,12 +335,236 @@ views:
                 label-color: lightgrey
                 label-padding-top: 8px
                 label-padding-left: 12px
-                label-font-size: 12px     
+                label-font-size: 12px
                 font-size: 16px
                 padding-bottom: 4px
                 padding-left: 12px
                 line-color: white
 
+      # 10 ───────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 10. Grid-shrink (v0.3.23)
+            heading_style: subtitle
+          - type: markdown
+            content: |
+              _Textbox + 5 round letter-buttons in a `horizontal-stack`. Pre-v0.3.23
+              the textbox would refuse to shrink below ~200 px, pushing the last
+              buttons off-screen. Now: all 5 stay visible at any width._
+          - type: horizontal-stack
+            cards:
+              - type: custom:super-text-input
+                entity: input_text.sti_test
+                placeholder: Bedtijd! Ga je slapen?
+                hide_label: true
+                style:
+                  card:
+                    background: '#f1f3f4'
+                    border-radius: 20px
+                    padding: 4px
+                  editor:
+                    vertical-align: center
+                    color: '#202124'
+                    placeholder-color: '#5f6368'
+                    line-color: transparent
+                    padding-left: 12px
+              - type: custom:button-card
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: M
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background-color: '#5b8def'
+                    - color: white
+                    - border-radius: 50%
+                    - height: 36px
+                    - width: 36px
+                    - margin: 0 auto
+                    - padding: 0
+                  name:
+                    - color: white
+                    - font-weight: 700
+                    - font-size: 15px
+                    - padding: 0
+              - type: custom:button-card
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: S
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background-color: '#ff7a59'
+                    - color: white
+                    - border-radius: 50%
+                    - height: 36px
+                    - width: 36px
+                    - margin: 0 auto
+                    - padding: 0
+                  name:
+                    - color: white
+                    - font-weight: 700
+                    - font-size: 15px
+                    - padding: 0
+              - type: custom:button-card
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: J
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background-color: '#9b51e0'
+                    - color: white
+                    - border-radius: 50%
+                    - height: 36px
+                    - width: 36px
+                    - margin: 0 auto
+                    - padding: 0
+                  name:
+                    - color: white
+                    - font-weight: 700
+                    - font-size: 15px
+                    - padding: 0
+              - type: custom:button-card
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: L
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background-color: '#f2c94c'
+                    - color: '#333'
+                    - border-radius: 50%
+                    - height: 36px
+                    - width: 36px
+                    - margin: 0 auto
+                    - padding: 0
+                  name:
+                    - color: '#333'
+                    - font-weight: 700
+                    - font-size: 15px
+                    - padding: 0
+              - type: custom:button-card
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: A
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background-color: '#27ae60'
+                    - color: white
+                    - border-radius: 50%
+                    - height: 36px
+                    - width: 36px
+                    - margin: 0 auto
+                    - padding: 0
+                  name:
+                    - color: white
+                    - font-weight: 700
+                    - font-size: 15px
+                    - padding: 0
 
-            
-     
+      # 11 ───────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 11. Width / max-width (v0.3.24)
+            heading_style: subtitle
+          - type: markdown
+            content: |
+              _New in v0.3.24: pin a card to a fixed `width` or cap it with
+              `max-width`. The card on the left is locked to **220 px**; the one
+              on the right is capped at **300 px** but free to shrink below that._
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: fixed 220 px
+            hide_label: true
+            style:
+              card:
+                width: 220px
+                background: '#fef3c7'
+                border-radius: 16px
+                padding: 6px
+              editor:
+                vertical-align: center
+                color: '#78350f'
+                placeholder-color: '#92400e'
+                line-color: transparent
+                padding-left: 10px
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: max 300 px, shrinks below
+            hide_label: true
+            style:
+              card:
+                max-width: 300px
+                background: '#dbeafe'
+                border-radius: 16px
+                padding: 6px
+              editor:
+                vertical-align: center
+                color: '#1e3a8a'
+                placeholder-color: '#3b82f6'
+                line-color: transparent
+                padding-left: 10px
+
+      # 12 ───────────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 12. Borderless (transparent)
+            heading_style: subtitle
+          - type: markdown
+            content: |
+              _All cards above use the default `ha-card` chrome (white background +
+              border + shadow). To make a super-text-input blend into the section
+              background — set `style.card.background: transparent` and `border: none`.
+              Useful for embedding into custom layouts where you want only the input +
+              buttons to be visible, no card frame._
+          - type: custom:super-text-input
+            entity: input_text.sti_test
+            placeholder: no card chrome…
+            hide_label: true
+            compact_buttons: true
+            buttons:
+              - id: l
+                icon: mdi:magnify
+                position: start
+                size: 28px
+                icon_size: 18px
+                style:
+                  background: transparent
+                  color: '#5f6368'
+              - id: x
+                icon: mdi:close
+                position: end
+                size: 28px
+                icon_size: 16px
+                template: clear
+                style:
+                  background: transparent
+                  color: '#5f6368'
+            style:
+              card:
+                background: transparent
+                border: none
+                height: 40px
+                padding: 0
+              editor:
+                vertical-align: center
+                background: transparent
+                line-color: transparent
+                padding-left: 4px
+                color: '#202124'
+                placeholder-color: '#5f6368'
