@@ -4,6 +4,11 @@ All notable changes to this project. Versioning is loosely SemVer — minor bump
 back-compatible additions, patch bumps are fixes, anything that shifts a default look
 is called out in the README's [Breaking changes](README.md#-breaking-changes) section.
 
+## v0.3.28
+
+### Changed
+- Added MIT LICENSE file to satisfy HACS validation (`check-license`). No code changes.
+
 ## v0.3.27
 
 ### Fixed

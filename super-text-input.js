@@ -24,9 +24,9 @@ import {
 	debounce,
 	computeStateName,
 	normalizeStyleKeys,
-} from "./card-utils.js?v=0.3.27";
+} from "./card-utils.js?v=0.3.28";
 
-import "./editor.js?v=0.3.27";
+import "./editor.js?v=0.3.28";
 
 // Get LitElement base class from Home Assistant frontend
 const LitElement = customElements.get("home-assistant-main")
@@ -691,6 +691,6 @@ window.customCards.push({
 		"A text input card with enhanced features - real-time input, icons, buttons and actions",
 	preview: "/local/community/super-text-input/preview.png",
 	configurable: true,
-	version: "0.3.27",
+	version: "0.3.28",
 	customElement: true,
 });
